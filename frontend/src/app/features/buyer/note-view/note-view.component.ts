@@ -15,6 +15,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { getDocument, GlobalWorkerOptions, PDFDocumentProxy } from 'pdfjs-dist';
 import { ApiService } from '@core/services/api.service';
 import { AuthService } from '@core/services/auth.service';
+import { ReadingProgressService } from '@core/services/reading-progress.service';
 import { Note } from '@core/models';
 
 GlobalWorkerOptions.workerSrc = 'assets/pdf.worker.min.mjs';
@@ -105,6 +106,7 @@ export class NoteViewComponent {
   private route = inject(ActivatedRoute);
   private api = inject(ApiService);
   private auth = inject(AuthService);
+  private reading = inject(ReadingProgressService);
   private destroyRef = inject(DestroyRef);
 
   private canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('pageCanvas');
@@ -148,6 +150,7 @@ export class NoteViewComponent {
         next: (r) => {
           this.note.set(r.data);
           if (r.data.totalPages) this.totalPages.set(r.data.totalPages);
+          this.recordProgress();
         },
         error: () => {},
       });
@@ -244,6 +247,7 @@ export class NoteViewComponent {
     if (this.currentPage() > 1) {
       this.currentPage.update((p) => p - 1);
       void this.renderCurrentPage();
+      this.recordProgress();
     }
   }
 
@@ -251,7 +255,21 @@ export class NoteViewComponent {
     if (this.currentPage() < this.totalPages()) {
       this.currentPage.update((p) => p + 1);
       void this.renderCurrentPage();
+      this.recordProgress();
     }
+  }
+
+  /** Save this note to "Continue Reading" (dedupes + moves to front). */
+  private recordProgress(): void {
+    const n = this.note();
+    if (!n || this.totalPages() < 1) return;
+    this.reading.record({
+      noteId: this.id,
+      title: n.title,
+      subject: n.subject,
+      lastPage: this.currentPage(),
+      totalPages: this.totalPages(),
+    });
   }
 
   private formatStamp(): string {
@@ -297,9 +315,11 @@ export class NoteViewComponent {
       const data = await blob.arrayBuffer();
       this.pdfDoc = await getDocument({ data, disableAutoFetch: false, disableStream: false }).promise;
       this.totalPages.set(this.pdfDoc.numPages);
-      this.currentPage.set(1);
+      // Resume where the buyer left off (clamped to the document length).
+      this.currentPage.set(Math.min(Math.max(this.reading.pageFor(this.id), 1), this.pdfDoc.numPages));
       this.loading.set(false);
       await this.renderCurrentPage();
+      this.recordProgress();
     } catch {
       this.loading.set(false);
       this.error.set(true);

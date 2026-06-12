@@ -3,6 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '@core/services/api.service';
+import { ReadingProgressService, ReadingEntry } from '@core/services/reading-progress.service';
 import { Purchase } from '@core/models';
 import { IllustrationComponent } from '@ui/illustration/illustration.component';
 import { subjectGradientFlat } from '@shared/util/note-display';
@@ -20,6 +21,27 @@ import { subjectGradientFlat } from '@shared/util/note-display';
         <p>{{ total() }} notes in your library.</p>
       </div>
     </div>
+
+    @if (reading().length) {
+      <div class="continue-reading">
+        <div class="cr-head">
+          <h3>Continue reading</h3>
+          <button type="button" class="link-clear" (click)="clearReading()">Clear</button>
+        </div>
+        <div class="cr-strip">
+          @for (r of reading(); track r.noteId) {
+            <a class="cr-card" [routerLink]="['/notes', r.noteId, 'view']">
+              <span class="cr-thumb" [style.background]="crThumb(r)">{{ crGlyph(r) }}</span>
+              <span class="cr-body">
+                <span class="cr-title">{{ r.title }}</span>
+                <span class="cr-prog">Page {{ r.lastPage }} / {{ r.totalPages }}</span>
+                <span class="cr-bar"><i [style.width.%]="crPct(r)"></i></span>
+              </span>
+            </a>
+          }
+        </div>
+      </div>
+    }
 
     @if (loading()) {
       <div class="skel" style="height:240px;border-radius:12px"></div>
@@ -101,11 +123,13 @@ import { subjectGradientFlat } from '@shared/util/note-display';
 })
 export class MyPurchasesComponent {
   private api = inject(ApiService);
+  private readingService = inject(ReadingProgressService);
   private destroyRef = inject(DestroyRef);
 
   protected purchases = signal<Purchase[]>([]);
   protected total = signal(0);
   protected loading = signal(true);
+  protected reading = signal<ReadingEntry[]>(this.readingService.list());
 
   constructor() {
     this.api
@@ -123,5 +147,19 @@ export class MyPurchasesComponent {
 
   protected thumbBg(p: Purchase): string {
     return subjectGradientFlat(p.note?.subject);
+  }
+
+  protected crThumb(r: ReadingEntry): string {
+    return subjectGradientFlat(r.subject);
+  }
+  protected crGlyph(r: ReadingEntry): string {
+    return (r.subject ?? '?').charAt(0).toUpperCase();
+  }
+  protected crPct(r: ReadingEntry): number {
+    return r.totalPages ? Math.round((r.lastPage / r.totalPages) * 100) : 0;
+  }
+  protected clearReading(): void {
+    this.reading().forEach((r) => this.readingService.remove(r.noteId));
+    this.reading.set([]);
   }
 }
