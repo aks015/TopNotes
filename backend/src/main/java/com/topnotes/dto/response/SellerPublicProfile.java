@@ -13,6 +13,7 @@ public class SellerPublicProfile {
     private String institution;
     private String bio;
     private String profileImageUrl;
+    private Boolean verified;
     private Long   totalNotes;
     private Long   totalSales;
 }

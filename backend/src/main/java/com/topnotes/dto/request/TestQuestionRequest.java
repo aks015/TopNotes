@@ -21,6 +21,9 @@ public class TestQuestionRequest {
     @Size(max = 100, message = "Subject must not exceed 100 characters")
     private String subject;
 
+    /** Exam-category pool this question belongs to. NULL = the shared "General" pool. */
+    private Long categoryId;
+
     private Integer displayOrder;
 
     private Boolean isActive = true;

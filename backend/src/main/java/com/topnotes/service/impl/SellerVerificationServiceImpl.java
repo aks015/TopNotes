@@ -250,6 +250,9 @@ public class SellerVerificationServiceImpl implements SellerVerificationService 
                 .role(u.getRole()).status(u.getStatus())
                 .isVerified(u.getIsVerified()).testPassed(u.getTestPassed())
                 .testScore(u.getTestScore()).marksheetApproved(u.getMarksheetApproved())
+                .marksheetUrl(u.getMarksheetUrl())
+                .institution(u.getInstitution()).classLevel(u.getClassLevel()).bio(u.getBio())
+                .phone(u.getPhone()).profileImageUrl(u.getProfileImageUrl())
                 .createdAt(u.getCreatedAt()).build();
     }
 }

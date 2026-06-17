@@ -2,6 +2,7 @@ package com.topnotes.service.impl;
 
 import com.topnotes.dto.request.ReviewRequest;
 import com.topnotes.dto.response.ReviewResponse;
+import com.topnotes.dto.response.ReviewStatsResponse;
 import com.topnotes.entity.Note;
 import com.topnotes.entity.Review;
 import com.topnotes.entity.User;
@@ -46,29 +47,26 @@ public class ReviewServiceImpl implements ReviewService {
         if (!purchaseRepository.existsByBuyerIdAndNoteId(buyerId, noteId)) {
             throw new BadRequestException("You must purchase this note before reviewing it");
         }
-        // One review per buyer per note
-        if (reviewRepository.existsByBuyerIdAndNoteId(buyerId, noteId)) {
-            throw new BadRequestException("You have already reviewed this note");
-        }
 
         Note note = noteRepository.findById(noteId)
                 .orElseThrow(() -> new ResourceNotFoundException("Note", noteId));
-        User buyer = userRepository.findById(buyerId)
-                .orElseThrow(() -> new ResourceNotFoundException("User", buyerId));
 
-        Review review = Review.builder()
-                .note(note)
-                .buyer(buyer)
-                .rating(request.getRating())
-                .comment(request.getComment())
-                .build();
+        // Upsert: update the existing review if the buyer already reviewed, else create one.
+        Review review = reviewRepository.findByBuyerIdAndNoteId(buyerId, noteId).orElse(null);
+        if (review == null) {
+            User buyer = userRepository.findById(buyerId)
+                    .orElseThrow(() -> new ResourceNotFoundException("User", buyerId));
+            review = Review.builder().note(note).buyer(buyer).build();
+        }
+        review.setRating(request.getRating());
+        review.setComment(request.getComment());
 
         Review saved = reviewRepository.save(review);
 
         // Recalculate and persist denormalised average rating
         recalculateRating(note);
 
-        log.info("Review id={} submitted for note id={} by buyer id={}", saved.getId(), noteId, buyerId);
+        log.info("Review id={} saved for note id={} by buyer id={}", saved.getId(), noteId, buyerId);
         return toResponse(saved);
     }
 
@@ -78,6 +76,34 @@ public class ReviewServiceImpl implements ReviewService {
         return reviewRepository
                 .findByNoteIdOrderByCreatedAtDesc(noteId, pageable)
                 .map(this::toResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ReviewStatsResponse getReviewStats(Long noteId) {
+        java.util.Map<Integer, Long> counts = new java.util.LinkedHashMap<>();
+        for (int star = 5; star >= 1; star--) {
+            counts.put(star, 0L);
+        }
+        for (Object[] row : reviewRepository.ratingDistribution(noteId)) {
+            int star = ((Number) row[0]).intValue();
+            long cnt = ((Number) row[1]).longValue();
+            if (star >= 1 && star <= 5) {
+                counts.put(star, cnt);
+            }
+        }
+        BigDecimal avg = reviewRepository.calculateAverageRatingForNote(noteId);
+        return ReviewStatsResponse.builder()
+                .average(avg != null ? avg.setScale(2, java.math.RoundingMode.HALF_UP) : BigDecimal.ZERO)
+                .total(reviewRepository.countByNoteId(noteId))
+                .counts(counts)
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ReviewResponse getMyReview(Long noteId, Long buyerId) {
+        return reviewRepository.findByBuyerIdAndNoteId(buyerId, noteId).map(this::toResponse).orElse(null);
     }
 
     // ── Private helpers ───────────────────────────────────────

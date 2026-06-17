@@ -1,0 +1,444 @@
+@if (c(); as content) {
+  <div class="lp">
+    <!-- ============ NAV ============ -->
+    <nav class="lp-nav">
+      <div class="lp-nav-inner">
+        <a class="lp-brand" routerLink="/" aria-label="TopNotes home">
+          <app-logo [size]="34" [wordSize]="20" />
+        </a>
+        <div class="lp-nav-links">
+          <a routerLink="/browse">Browse</a>
+          @if (content.howItWorks?.enabled !== false) {
+            <a href="#how" (click)="scrollTo('how', $event)">How it works</a>
+          }
+          @if (content.founders?.enabled !== false && content.founders?.items?.length) {
+            <a href="#founders" (click)="scrollTo('founders', $event)">Founders</a>
+          }
+        </div>
+        <div class="lp-nav-actions">
+          @if (isLoggedIn()) {
+            <a class="lp-btn-dark" [routerLink]="workspaceLink()">Go to app</a>
+            <div class="lp-acct">
+              <button class="lp-acct-btn" (click)="toggleAcct($event)" aria-label="Account menu">
+                <span class="lp-acct-av">{{ initials(user()?.fullName || '?') }}</span>
+                <span class="lp-acct-name">{{ user()?.fullName?.split(' ')?.[0] }}</span>
+              </button>
+              @if (acctOpen()) {
+                <div class="lp-acct-menu" role="menu">
+                  <a routerLink="/account">Account</a>
+                  <button type="button" (click)="logout()">Log out</button>
+                </div>
+              }
+            </div>
+          } @else {
+            <a class="lp-link" routerLink="/login">Log in</a>
+            <a class="lp-btn-dark" routerLink="/register">Sign up free</a>
+          }
+        </div>
+      </div>
+    </nav>
+
+    <!-- ============ HERO ============ -->
+    @if (content.hero?.enabled !== false) {
+      <header class="lp-hero">
+        <div class="lp-hero-copy">
+          @if (content.hero?.trustBadge) {
+            <div class="lp-trust">
+              <span class="lp-trust-tick">✓</span>
+              <span>{{ content.hero?.trustBadge }}</span>
+            </div>
+          }
+          <h1 class="lp-h1">
+            @if (content.hero?.headline) {
+              @for (seg of heroSegments(content.hero?.headline); track $index) {
+                @if (seg.mark) {
+                  <span class="lp-mark" [style.background]="markBg(content.hero?.highlightColor)">{{ seg.text }}</span>
+                } @else {
+                  <span>{{ seg.text }}</span>
+                }
+              }
+            } @else {
+              {{ content.hero?.title }}
+              <span class="lp-mark" [style.background]="markBg(content.hero?.highlightColor)">{{ content.hero?.highlight }}</span>
+              {{ content.hero?.titleAfter }}
+            }
+          </h1>
+          <p class="lp-hero-sub">{{ content.hero?.subtitle }}</p>
+          <div class="lp-hero-cta">
+            @if (isExternal(content.hero?.ctaPrimaryLink)) {
+              <a class="lp-btn-primary" [href]="content.hero?.ctaPrimaryLink">{{ content.hero?.ctaPrimary || 'Browse notes' }}</a>
+            } @else {
+              <a class="lp-btn-primary" [routerLink]="content.hero?.ctaPrimaryLink || '/browse'">{{ content.hero?.ctaPrimary || 'Browse notes' }}</a>
+            }
+            @if (!isLoggedIn()) {
+              @if (isExternal(content.hero?.ctaSecondaryLink)) {
+                <a class="lp-btn-ghost" [href]="content.hero?.ctaSecondaryLink">{{ content.hero?.ctaSecondary || 'Become a seller' }}</a>
+              } @else {
+                <a class="lp-btn-ghost" [routerLink]="content.hero?.ctaSecondaryLink || '/register'" [queryParams]="regSellerQP(content.hero?.ctaSecondaryLink)">{{ content.hero?.ctaSecondary || 'Become a seller' }}</a>
+              }
+            } @else if (isBuyerOnly()) {
+              <a class="lp-btn-ghost" routerLink="/account">{{ content.hero?.ctaSecondary || 'Become a seller' }}</a>
+            } @else if (canSell()) {
+              <a class="lp-btn-ghost" routerLink="/seller/upload">Upload a note</a>
+            }
+          </div>
+          @if (stats(); as s) {
+            @if (s.reviewCount > 0 || s.learners > 0) {
+              <div class="lp-hero-rating">
+                <div class="lp-avatars">
+                  @for (n of notes().slice(0, 3); track n.id) {
+                    <span [style.background]="subjectFg(n.subject)">{{ initials(n.seller?.fullName || 'T') }}</span>
+                  }
+                  @if (s.learners > 0) {
+                    <span style="background: #16141e; font-size: 11px">+{{ s.learners }}</span>
+                  }
+                </div>
+                <div class="lp-rating-text">
+                  @if (s.reviewCount > 0) {
+                    <span class="lp-gold">
+                      @for (on of stars(s.averageRating); track $index) {
+                        <span [style.color]="on ? null : '#d9d3c2'">★</span>
+                      }
+                    </span>
+                    &nbsp; <strong>{{ s.averageRating | number: '1.1-1' }}</strong>
+                    from {{ s.reviewCount }} {{ s.reviewCount === 1 ? 'review' : 'reviews' }}
+                  } @else {
+                    <strong>{{ s.learners }}</strong> {{ s.learners === 1 ? 'learner' : 'learners' }} and counting
+                  }
+                </div>
+              </div>
+            }
+          }
+        </div>
+
+        <!-- Live note-card collage — pulled from real trending notes -->
+        @if (notes()[0]; as n0) {
+          <div class="lp-collage">
+            @if (notes()[1]; as n1) {
+              <a class="lp-card-back" [routerLink]="['/notes', n1.id]">
+                <div class="lp-card-head">
+                  <span class="lp-tag-indigo" [style.background]="subjectBg(n1.subject)" [style.color]="subjectFg(n1.subject)"
+                    >{{ n1.subject }}@if (n1.examType) { · {{ examLabel(n1.examType) }} }</span
+                  >
+                  @if (n1.totalPages) {
+                    <span class="lp-pg">{{ n1.totalPages }} pages</span>
+                  }
+                </div>
+                <div class="lp-card-body lp-ruled">
+                  <div class="lp-hand lp-hand-lg">{{ n1.title }}</div>
+                  @if (n1.description) {
+                    <div class="lp-hand lp-hand-clamp">{{ n1.description }}</div>
+                  }
+                </div>
+              </a>
+            }
+            <a class="lp-card-front" [routerLink]="['/notes', n0.id]">
+              <div class="lp-card-head">
+                <span class="lp-tag-indigo" [style.background]="subjectBg(n0.subject)" [style.color]="subjectFg(n0.subject)"
+                  >{{ n0.subject }}@if (n0.examType) { · {{ examLabel(n0.examType) }} }</span
+                >
+                @if (n0.totalPages) {
+                  <span class="lp-pg">{{ n0.totalPages }} pages</span>
+                }
+              </div>
+              <div class="lp-card-body lp-ruled">
+                <div class="lp-hand lp-hand-lg">{{ n0.title }}</div>
+                @if (n0.description) {
+                  <div class="lp-hand lp-hand-clamp">{{ n0.description }}</div>
+                }
+              </div>
+              <div class="lp-card-foot">
+                <span class="lp-card-av" [style.background]="subjectFg(n0.subject)">{{
+                  initials(n0.seller?.fullName || 'T')
+                }}</span>
+                <div class="lp-card-meta">
+                  <div class="lp-card-name">{{ n0.seller?.fullName || 'Verified topper' }} <span class="lp-verify">✓</span></div>
+                  <div class="lp-card-rank">{{ n0.seller?.institution || 'Verified topper' }}</div>
+                </div>
+                <div class="lp-card-price">₹{{ n0.price }}</div>
+              </div>
+            </a>
+            <div class="lp-chip lp-chip-dark"><span class="lp-green">✓</span> {{ content.hero?.badgeVerified || 'Marksheet verified' }}</div>
+            <div class="lp-chip lp-chip-light">
+              @if (n0.reviewCount) {
+                <span class="lp-gold">★ {{ n0.averageRating || 0 | number: '1.1-1' }}</span>
+              } @else {
+                <span class="lp-gold">New</span>
+              }
+              @if (n0.purchaseCount) { · {{ n0.purchaseCount }} sold }
+            </div>
+            <div class="lp-hand-note">{{ content.hero?.handwritingNote || 'real handwriting ↓' }}</div>
+          </div>
+        }
+      </header>
+    }
+
+    <!-- ============ STATS (computed live — not admin-editable) ============ -->
+    @if (statItems().length) {
+      <section class="lp-stats">
+        <div class="lp-stats-inner">
+          @for (s of statItems(); track s.label; let i = $index) {
+            <div class="lp-stat" [class.amber]="i % 2 === 1">
+              <div class="lp-stat-num">{{ s.value | number }}</div>
+              <div class="lp-stat-label">{{ s.label }}</div>
+            </div>
+          }
+        </div>
+      </section>
+    }
+
+    <!-- ============ MARQUEE (real coverage + editable brand phrases) ============ -->
+    @if (content.marquee?.enabled !== false && marqueeItems().length) {
+      <section class="lp-marquee">
+        <div class="lp-marquee-track" [style.animation-duration]="marqueeDuration()">
+          @for (rep of [0, 1]; track rep) {
+            <div class="lp-marquee-group">
+              @for (t of marqueeItems(); track $index) {
+                <span class="lp-marquee-item">{{ t }} @if (marqueeSep()) { <span class="lp-marquee-dot">{{ marqueeSep() }}</span> }</span>
+              }
+            </div>
+          }
+        </div>
+      </section>
+    }
+
+    <!-- ============ NOTES PREVIEW ============ -->
+    @if (content.notesPreview?.enabled !== false && trendingNotes().length) {
+      <section id="browse" class="lp-sec">
+        <div class="lp-sec-head-row">
+          <div>
+            <div class="lp-eyebrow">{{ content.notesPreview?.eyebrow || "fresh from the toppers' desks" }}</div>
+            <h2 class="lp-h2">{{ content.notesPreview?.heading || 'Trending notes this week' }}</h2>
+          </div>
+          @if (isExternal(content.notesPreview?.linkHref)) {
+            <a class="lp-viewall" [href]="content.notesPreview?.linkHref">{{ content.notesPreview?.linkText || 'View all notes' }} →</a>
+          } @else {
+            <a class="lp-viewall" [routerLink]="content.notesPreview?.linkHref || '/browse'">{{ content.notesPreview?.linkText || 'View all notes' }} →</a>
+          }
+        </div>
+        <div class="lp-notes-grid">
+          @for (n of trendingNotes(); track n.id) {
+            <a class="lp-note" [routerLink]="['/notes', n.id]">
+              <div class="lp-note-cover" [style.background]="subjectBg(n.subject)">
+                @if (n.subject) {
+                  <span class="lp-note-tag" [style.background]="subjectFg(n.subject)">{{ n.subject }}</span>
+                }
+                <div class="lp-note-title">{{ n.title }}</div>
+              </div>
+              <div class="lp-note-foot">
+                <div class="lp-note-seller">
+                  <span class="lp-note-av" [style.background]="subjectFg(n.subject)">{{
+                    initials(n.seller?.fullName || 'T')
+                  }}</span>
+                  <span class="lp-note-name">{{ n.seller?.fullName || 'Topper' }}</span>
+                </div>
+                <div class="lp-note-row">
+                  <span class="lp-note-meta">
+                    @if (n.reviewCount) {
+                      <span class="lp-gold">★ {{ n.averageRating || 0 | number: '1.1-1' }}</span>
+                    } @else {
+                      <span class="lp-gold">New</span>
+                    }
+                    @if (n.totalPages) {
+                      · {{ n.totalPages }} pages
+                    }
+                  </span>
+                  <span class="lp-note-price">₹{{ n.price }}</span>
+                </div>
+              </div>
+            </a>
+          }
+        </div>
+      </section>
+    }
+
+    <!-- ============ HOW IT WORKS ============ -->
+    @if (content.howItWorks?.enabled !== false) {
+      <section id="how" class="lp-sec">
+        <div class="lp-sec-head">
+          <div class="lp-eyebrow">{{ content.howItWorks?.eyebrow || 'simple on both sides' }}</div>
+          <h2 class="lp-h2">{{ content.howItWorks?.heading || 'How it works' }}</h2>
+        </div>
+        <div class="lp-how">
+          <div class="lp-how-card">
+            <span class="lp-pill lp-pill-indigo">{{ content.howItWorks?.buyerLabel || 'For students' }}</span>
+            @for (s of content.howItWorks?.buyer ?? []; track s.title; let i = $index) {
+              <div class="lp-step">
+                <span class="lp-step-num">{{ i + 1 }}</span>
+                <div>
+                  <div class="lp-step-title">{{ s.title }}</div>
+                  <div class="lp-step-desc">{{ s.desc }}</div>
+                </div>
+              </div>
+            }
+          </div>
+          <div class="lp-how-card lp-how-dark">
+            <span class="lp-pill lp-pill-amber">{{ content.howItWorks?.sellerLabel || 'For toppers' }}</span>
+            @for (s of content.howItWorks?.seller ?? []; track s.title; let i = $index) {
+              <div class="lp-step">
+                <span class="lp-step-num amber">{{ i + 1 }}</span>
+                <div>
+                  <div class="lp-step-title">{{ s.title }}</div>
+                  <div class="lp-step-desc">{{ s.desc }}</div>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      </section>
+    }
+
+    <!-- ============ WHY / FEATURES ============ -->
+    @if (content.features?.enabled !== false && content.features?.items?.length) {
+      <section class="lp-soft">
+        <div class="lp-sec">
+          <div class="lp-sec-head">
+            <div class="lp-eyebrow">{{ content.features?.eyebrow || 'why students trust us' }}</div>
+            <h2 class="lp-h2">{{ content.features?.heading || 'Why TopNotes' }}</h2>
+          </div>
+          <div class="lp-feats">
+            @for (f of content.features?.items ?? []; track f.title; let i = $index) {
+              <div class="lp-feat" [class.amber]="i % 2 === 1">
+                @if (f.icon) { <lucide-icon class="lp-feat-ic" [name]="f.icon" [size]="24" /> }
+                <div class="lp-feat-title">{{ f.title }}</div>
+                <div class="lp-feat-desc">{{ f.desc }}</div>
+              </div>
+            }
+          </div>
+        </div>
+      </section>
+    }
+
+    <!-- ============ TESTIMONIALS ============ -->
+    @if (content.testimonials?.enabled !== false && content.testimonials?.items?.length) {
+      <section class="lp-sec">
+        <div class="lp-sec-head">
+          <div class="lp-eyebrow">{{ content.testimonials?.eyebrow || "don't take our word for it" }}</div>
+          <h2 class="lp-h2">{{ content.testimonials?.heading || 'Loved by aspirants' }}</h2>
+        </div>
+        <div class="lp-tests">
+          @for (t of content.testimonials?.items ?? []; track t.name) {
+            <div class="lp-test">
+              <div class="lp-stars">
+                @for (on of stars(t.rating); track $index) {
+                  <span [class.on]="on">★</span>
+                }
+              </div>
+              <p class="lp-test-quote">"{{ t.quote }}"</p>
+              <div class="lp-test-by">
+                @if (t.photoUrl) {
+                  <img class="lp-test-av" [src]="t.photoUrl" [alt]="t.name" />
+                } @else {
+                  <span class="lp-test-av">{{ initials(t.name) }}</span>
+                }
+                <span
+                  ><strong>{{ t.name }}</strong> · {{ t.exam }}</span
+                >
+              </div>
+            </div>
+          }
+        </div>
+      </section>
+    }
+
+    <!-- ============ FOUNDERS ============ -->
+    @if (content.founders?.enabled !== false && content.founders?.items?.length) {
+      <section id="founders" class="lp-soft">
+        <div class="lp-sec">
+          <div class="lp-sec-head">
+            <div class="lp-eyebrow">{{ content.founders?.eyebrow || 'why we built this' }}</div>
+            <h2 class="lp-h2">{{ content.founders?.heading || 'Built by students, for students' }}</h2>
+            @if (content.founders?.story) {
+              <p class="lp-founders-story">{{ content.founders?.story }}</p>
+            }
+          </div>
+          <div class="lp-founders-grid">
+            @for (m of content.founders?.items ?? []; track m.name; let i = $index) {
+              <div class="lp-founder">
+                @if (m.photoUrl) {
+                  <img class="lp-founder-bg" [src]="m.photoUrl" [alt]="m.name" />
+                } @else {
+                  <span class="lp-founder-bg lp-founder-ph" [class.dark]="i % 2 === 1">{{ initials(m.name) }}</span>
+                }
+                <div class="lp-founder-scrim"></div>
+                <div class="lp-founder-overlay">
+                  <div class="lp-founder-name">
+                    {{ m.name }}
+                    @if (m.verified !== false) {
+                      <lucide-icon class="lp-founder-verify" name="badge-check" [size]="18" />
+                    }
+                  </div>
+                  @if (m.bio) { <div class="lp-founder-bio">{{ m.bio }}</div> }
+                  <div class="lp-founder-meta">
+                    @if (m.role) { <span class="lp-founder-role-chip">{{ m.role }}</span> }
+                    @if (m.linkedin) {
+                      <a class="lp-founder-cta" [href]="m.linkedin" target="_blank" rel="noopener" aria-label="LinkedIn profile">
+                        <lucide-icon name="linkedin" [size]="15" /> Connect
+                      </a>
+                    }
+                  </div>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      </section>
+    }
+
+    <!-- ============ FAQ ============ -->
+    @if (content.faq?.enabled !== false && content.faq?.items?.length) {
+      <section class="lp-sec lp-faq-wrap">
+        <div class="lp-sec-head">
+          <div class="lp-eyebrow">{{ content.faq?.eyebrow || 'before you ask' }}</div>
+          <h2 class="lp-h2">{{ content.faq?.heading || 'Questions, answered' }}</h2>
+        </div>
+        <div class="lp-faq">
+          @for (q of content.faq?.items ?? []; track q.q; let i = $index) {
+            <div class="lp-faq-item" [class.open]="openFaq() === i">
+              <button type="button" (click)="toggleFaq(i)">
+                <span class="lp-faq-q">{{ q.q }}</span>
+                <span class="lp-faq-chev">+</span>
+              </button>
+              @if (openFaq() === i) {
+                <p class="lp-faq-a">{{ q.a }}</p>
+              }
+            </div>
+          }
+        </div>
+      </section>
+    }
+
+    <!-- ============ CTA ============ -->
+    @if (content.cta?.enabled !== false) {
+      <section class="lp-cta-wrap">
+        <div class="lp-cta">
+          <div class="lp-cta-glow lp-cta-glow-a"></div>
+          <div class="lp-cta-glow lp-cta-glow-b"></div>
+          <div class="lp-cta-inner">
+            @if (content.cta?.eyebrow) {
+              <div class="lp-cta-eyebrow">{{ content.cta?.eyebrow }} ↓</div>
+            }
+            <h2 class="lp-cta-title">{{ content.cta?.title || "Start learning from India's toppers" }}</h2>
+            @if (content.cta?.subtitle) {
+              <p class="lp-cta-sub">{{ content.cta?.subtitle }}</p>
+            }
+            @if (!isLoggedIn()) {
+              @if (isExternal(content.cta?.buttonLink)) {
+                <a class="lp-cta-btn" [href]="content.cta?.buttonLink">{{ content.cta?.button || 'Get started' }}</a>
+              } @else {
+                <a class="lp-cta-btn" [routerLink]="content.cta?.buttonLink || '/register'">{{ content.cta?.button || 'Get started' }}</a>
+              }
+            } @else {
+              <a class="lp-cta-btn" [routerLink]="workspaceLink()">{{ workspaceLabel() }}</a>
+            }
+          </div>
+        </div>
+      </section>
+    }
+
+  </div>
+} @else if (loading()) {
+  <div class="lp-loading">Loading…</div>
+} @else {
+  <div class="lp-loading">Couldn't load the page. <a routerLink="/browse">Go to the marketplace →</a></div>
+}

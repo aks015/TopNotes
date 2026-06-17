@@ -30,11 +30,11 @@ describe('NoteCardComponent', () => {
     expect(el.textContent).toContain('Organic Chemistry');
     expect(el.textContent).toContain('JEE Main'); // JEE_MAIN → "JEE Main"
     expect(el.textContent).toContain('₹199');
-    expect(el.querySelector('.avatar')?.textContent?.trim()).toBe('PS');
+    expect(el.querySelector('.tnc-avatar')?.textContent?.trim()).toBe('PS');
   });
 
   it('links to the note detail route', () => {
-    const link = render(note).querySelector('a.note-card') as HTMLAnchorElement;
+    const link = render(note).querySelector('a.tnc') as HTMLAnchorElement;
     expect(link.getAttribute('href')).toContain('/notes/5');
   });
 });

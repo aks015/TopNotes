@@ -26,6 +26,13 @@ public class JwtUtil {
     @Value("${app.jwt.expiration-ms}")
     private long jwtExpirationMs;
 
+    @Value("${app.jwt.refresh-expiration-ms}")
+    private long refreshExpirationMs;
+
+    /** Marks the token kind so a refresh token can't be used as an access token. */
+    private static final String TYPE_CLAIM   = "type";
+    private static final String TYPE_REFRESH = "refresh";
+
     // ── Key building ──────────────────────────────────────────
 
     private SecretKey getSigningKey() {
@@ -58,6 +65,36 @@ public class JwtUtil {
                 .expiration(expiry)
                 .signWith(getSigningKey())
                 .compact();
+    }
+
+    /**
+     * Generates a long-lived refresh token (no role claim — the role is read
+     * fresh from the DB when the refresh is exchanged for a new access token).
+     */
+    public String generateRefreshToken(String email, Long userId) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId",   userId);
+        claims.put(TYPE_CLAIM, TYPE_REFRESH);
+
+        Date now    = new Date();
+        Date expiry = new Date(now.getTime() + refreshExpirationMs);
+
+        return Jwts.builder()
+                .claims(claims)
+                .subject(email)
+                .issuedAt(now)
+                .expiration(expiry)
+                .signWith(getSigningKey())
+                .compact();
+    }
+
+    /** True only for tokens minted by {@link #generateRefreshToken}. */
+    public boolean isRefreshToken(String token) {
+        try {
+            return TYPE_REFRESH.equals(parseClaims(token).get(TYPE_CLAIM, String.class));
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     // ── Claim extraction ──────────────────────────────────────

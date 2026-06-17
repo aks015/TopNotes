@@ -48,10 +48,8 @@ lucide-icon svg { display: block; }
 .side-brand .logo-text { transition: opacity var(--ease); white-space: nowrap; }
 body[data-collapsed="1"] .side-brand .logo-text { opacity: 0; }
 .nav { flex: 1; padding: 16px 12px; overflow-y: auto; }
-.nav-section { display: none; flex-direction: column; gap: 3px; }
-body.is-buyer .nav-section.buyer,
-body.is-seller .nav-section.seller,
-body.is-admin .nav-section.admin { display: flex; }
+/* Visibility is gated in the template via @if (role-aware); this just lays them out. */
+.nav-section { display: flex; flex-direction: column; gap: 3px; }
 .nav-head { font-size: var(--t-12); font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); padding: 8px 12px 6px; white-space: nowrap; transition: opacity var(--ease); }
 body[data-collapsed="1"] .nav-head { opacity: 0; }
 .nav-item { display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 12px; border-radius: var(--r-ctrl); color: var(--slate); text-decoration: none; font-size: var(--t-14); font-weight: 600; cursor: pointer; transition: var(--ease); position: relative; white-space: nowrap; }
@@ -133,10 +131,7 @@ body[data-collapsed="1"] .nav-item .ic { width: auto; }
   .mobile-tabs { display: flex; position: fixed; bottom: 0; left: 0; right: 0; height: 64px; background: var(--surface); border-top: 1px solid var(--line); z-index: 45; padding: 6px 4px; }
   .mtab { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 11px; font-weight: 600; text-decoration: none; }
   .mtab.active { color: var(--indigo-700); }
-  .mtab-section { display: none; flex: 1; }
-  body.is-buyer .mtab-section.buyer,
-  body.is-seller .mtab-section.seller,
-  body.is-admin .mtab-section.admin { display: contents; }
+  .mtab-section { display: contents; }
 }
 @media (min-width: 861px) { .scrim { display: none; } }
 
@@ -173,10 +168,11 @@ app-note-card { display: grid; }
 
 /* ---------- Continue reading ---------- */
 .continue-reading { margin-bottom: 28px; }
-.cr-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-.cr-head h3 { font-size: var(--t-16); }
+.cr-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.cr-head h3 { font-size: var(--t-16); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cr-head .link-clear { flex: none; }
 .cr-strip { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 4px; }
-.cr-card { flex: none; width: 230px; display: flex; gap: 12px; padding: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--sh-sm); text-decoration: none; color: inherit; transition: transform var(--ease), box-shadow var(--ease), border-color var(--ease); }
+.cr-card { flex: none; width: min(230px, 76vw); display: flex; gap: 12px; padding: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--sh-sm); text-decoration: none; color: inherit; transition: transform var(--ease), box-shadow var(--ease), border-color var(--ease); }
 .cr-card:hover { transform: translateY(-2px); box-shadow: var(--sh-md); border-color: var(--line-2); }
 .cr-thumb { flex: none; width: 44px; height: 58px; border-radius: 8px; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 20px; }
 .cr-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -398,6 +394,10 @@ body.viewer-mode { background: #14161f; overflow: hidden; }
   .page-head h1 { font-size: 26px; }
   .detail-title { font-size: 26px; }
   .purchase-card .pc-price { font-size: 32px; }
+}
+@media (max-width: 400px) {
+  .main-pad { padding: 16px 12px 88px; }
+  .page-head h1 { font-size: 22px; }
 }
 .split-bar { height: 40px; border-radius: var(--r-ctrl); overflow: hidden; display: flex; font-weight: 700; font-size: var(--t-14); color: #fff; margin: 16px 0; }
 .split-bar .sb-platform { background: var(--indigo-700); display: grid; place-items: center; transition: width var(--ease); }

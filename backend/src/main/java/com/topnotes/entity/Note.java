@@ -20,12 +20,19 @@ import java.util.List;
 @Table(
     name = "notes",
     indexes = {
-        @Index(name = "idx_note_seller",    columnList = "seller_id"),
-        @Index(name = "idx_note_status",    columnList = "status"),
-        @Index(name = "idx_note_class",     columnList = "class_level"),
-        @Index(name = "idx_note_subject",   columnList = "subject"),
-        @Index(name = "idx_note_exam_type", columnList = "exam_type"),
-        @Index(name = "idx_note_created",   columnList = "created_at")
+        @Index(name = "idx_note_seller",        columnList = "seller_id"),
+        // Filter columns (browse facets).
+        @Index(name = "idx_note_class",         columnList = "class_level"),
+        @Index(name = "idx_note_subject",       columnList = "subject"),
+        @Index(name = "idx_note_exam_type",     columnList = "exam_type"),
+        @Index(name = "idx_note_category",      columnList = "category"),
+        @Index(name = "idx_note_exam",          columnList = "exam"),
+        // Composite (status, sort) — browse always filters status='ACTIVE' then
+        // sorts; these let MySQL filter + order from one index (no filesort).
+        @Index(name = "idx_note_status_created", columnList = "status, created_at"),
+        @Index(name = "idx_note_status_popular", columnList = "status, purchase_count"),
+        @Index(name = "idx_note_status_rating",  columnList = "status, average_rating"),
+        @Index(name = "idx_note_status_price",   columnList = "status, price")
     }
 )
 @Getter
@@ -45,12 +52,22 @@ public class Note {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String description;
 
-    @Column(length = 60)
+    /** Optional level/stage (e.g. "Class 12", "Prelims", "Foundation"). Reuses the legacy class_level column. */
+    @Column(name = "class_level", length = 60)
     private String classLevel;
 
+    /** Exam category name, denormalised from the taxonomy (e.g. "Civil Services"). */
     @Column(length = 100)
+    private String category;
+
+    /** Exam name, denormalised from the taxonomy (e.g. "UPSC CSE"). */
+    @Column(length = 120)
+    private String exam;
+
+    @Column(length = 120)
     private String subject;
 
+    /** Legacy enum — superseded by the dynamic {@link #exam}/{@link #category} taxonomy. Kept for old data. */
     @Enumerated(EnumType.STRING)
     @Column(length = 30)
     private ExamType examType;
@@ -86,6 +103,11 @@ public class Note {
     @Column(nullable = false)
     @Builder.Default
     private Integer purchaseCount = 0;
+
+    /** Detail-page views (by non-owners) — for seller analytics + conversion. */
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer viewCount = 0;
 
     /** Denormalised average — recalculated after each new review. */
     @Column(precision = 4, scale = 2)

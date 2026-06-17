@@ -2,7 +2,9 @@ package com.topnotes.controller;
 
 import com.topnotes.dto.response.ApiResponse;
 import com.topnotes.dto.response.PayoutResponse;
+import com.topnotes.dto.response.PayoutStatsResponse;
 import com.topnotes.dto.response.SellerEarningsResponse;
+import com.topnotes.entity.enums.PayoutStatus;
 import com.topnotes.security.CustomUserDetails;
 import com.topnotes.service.PayoutService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -73,6 +75,40 @@ public class PayoutController {
             @RequestParam(defaultValue = "20") int size) {
         Pageable pageable = PageRequest.of(page, size); // method name already orders by requestedAt asc
         return ResponseEntity.ok(ApiResponse.success(payoutService.getPendingPayouts(pageable)));
+    }
+
+    @GetMapping("/admin/payouts/stats")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Payout KPIs: awaiting / paid out / failed totals")
+    public ResponseEntity<ApiResponse<PayoutStatsResponse>> stats() {
+        return ResponseEntity.ok(ApiResponse.success(payoutService.getStats()));
+    }
+
+    @GetMapping("/admin/payouts")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Admin payout list — filter by status (PENDING/PAID/FAILED, blank = all) + seller/UPI search")
+    public ResponseEntity<ApiResponse<Page<PayoutResponse>>> payouts(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "0")  int page,
+            @RequestParam(defaultValue = "20") int size) {
+        PayoutStatus filter = parseStatus(status);
+        // PENDING is a FIFO disbursement queue (oldest first); everything else reads
+        // as history, newest first.
+        Sort sort = filter == PayoutStatus.PENDING
+                ? Sort.by(Sort.Direction.ASC, "requestedAt")
+                : Sort.by(Sort.Direction.DESC, "requestedAt");
+        Pageable pageable = PageRequest.of(page, size, sort);
+        return ResponseEntity.ok(ApiResponse.success(payoutService.getPayouts(filter, q, pageable)));
+    }
+
+    private PayoutStatus parseStatus(String status) {
+        if (status == null || status.isBlank() || "ALL".equalsIgnoreCase(status)) return null;
+        try {
+            return PayoutStatus.valueOf(status.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return null; // unknown filter → treat as "all"
+        }
     }
 
     @PostMapping("/admin/payouts/{id}/pay")

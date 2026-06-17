@@ -1,15 +1,19 @@
 import { Injectable, signal, computed } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { tap } from 'rxjs/operators';
-import { Observable } from 'rxjs';
+import { catchError, finalize, map, shareReplay, tap } from 'rxjs/operators';
+import { Observable, of } from 'rxjs';
 import { environment } from '@env/environment';
 import { AuthResponse, ApiResponse } from '../models';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly TOKEN_KEY = 'tn_token';
+  private readonly REFRESH_KEY = 'tn_refresh';
   private readonly USER_KEY = 'tn_user';
+
+  /** Shared in-flight refresh so concurrent 401s trigger only one /auth/refresh. */
+  private refresh$?: Observable<string | null>;
 
   private _user = signal<AuthResponse | null>(this.loadStored());
 
@@ -25,6 +29,14 @@ export class AuthService {
   readonly canBuy = computed(() => this.isLoggedIn() && !this.isAdmin());
   /** Sellers can sell (publishing still requires verification). */
   readonly canSell = computed(() => this.isSeller());
+
+  /**
+   * Where the landing's "Go to app" button takes a user: the marketplace
+   * (Browse) for buyers & sellers — the seller console is one click away in the
+   * nav — and the admin console for admins. Single source of truth; don't
+   * re-derive per-role home elsewhere.
+   */
+  readonly homeLink = computed(() => (this.isAdmin() ? '/admin/dashboard' : '/browse'));
 
   constructor(
     private http: HttpClient,
@@ -83,27 +95,62 @@ export class AuthService {
 
   logout() {
     localStorage.removeItem(this.TOKEN_KEY);
+    localStorage.removeItem(this.REFRESH_KEY);
     localStorage.removeItem(this.USER_KEY);
     this._user.set(null);
-    this.router.navigate(['/login']);
+    this.router.navigate(['/']);
   }
 
   getToken(): string | null {
     return localStorage.getItem(this.TOKEN_KEY);
   }
 
+  getRefreshToken(): string | null {
+    return localStorage.getItem(this.REFRESH_KEY);
+  }
+
   /**
-   * Returning users land on the shared marketplace home (Browse). Only admins
-   * go to their console. A seller's dashboard stays one click away in the nav;
-   * first-time seller onboarding (verification) is handled by the signup flow.
+   * Exchange the stored refresh token for a fresh access token. Resolves to the
+   * new access token, or null if there's no refresh token / it was rejected
+   * (caller should then log out). Concurrent callers share one HTTP call.
+   */
+  refreshAccessToken(): Observable<string | null> {
+    if (this.refresh$) return this.refresh$;
+
+    const refreshToken = this.getRefreshToken();
+    if (!refreshToken) return of(null);
+
+    this.refresh$ = this.http
+      .post<ApiResponse<AuthResponse>>(`${environment.apiUrl}/auth/refresh`, { refreshToken })
+      .pipe(
+        tap((r) => {
+          if (r.success) this.persist(r.data);
+        }),
+        map((r) => (r.success ? r.data.token : null)),
+        catchError(() => of(null)),
+        finalize(() => (this.refresh$ = undefined)),
+        shareReplay(1),
+      );
+    return this.refresh$;
+  }
+
+  /**
+   * Every user (buyer, seller, admin) lands on the public landing page after
+   * login — it adapts to the logged-in state and links onward to their home via
+   * the nav. First-time seller onboarding (verification) is handled by signup.
    */
   navigateAfterLogin() {
-    if (this._user()?.role === 'ADMIN') this.router.navigate(['/admin/dashboard']);
-    else this.router.navigate(['/browse']);
+    this.router.navigate(['/']);
+  }
+
+  /** Persist a fresh AuthResponse (e.g. after a profile update) into the session. */
+  applyAuth(data: AuthResponse) {
+    this.persist(data);
   }
 
   private persist(data: AuthResponse) {
     localStorage.setItem(this.TOKEN_KEY, data.token);
+    if (data.refreshToken) localStorage.setItem(this.REFRESH_KEY, data.refreshToken);
     localStorage.setItem(this.USER_KEY, JSON.stringify(data));
     this._user.set(data);
   }

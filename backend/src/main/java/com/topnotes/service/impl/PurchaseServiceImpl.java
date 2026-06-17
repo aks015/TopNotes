@@ -9,6 +9,7 @@ import com.topnotes.exception.ResourceNotFoundException;
 import com.topnotes.repository.*;
 import com.topnotes.service.NotificationService;
 import com.topnotes.service.NoteService;
+import com.topnotes.service.PlatformConfigService;
 import com.topnotes.service.PurchaseService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,7 +34,9 @@ public class PurchaseServiceImpl implements PurchaseService {
     private final EarningRepository   earningRepository;
     private final NotificationService notificationService;
     private final NoteService         noteService;
+    private final PlatformConfigService platformConfigService;
 
+    /** Default commission, seeded from properties; the live value is read from platform_config per sale. */
     @Value("${app.business.platform-commission-percent}")
     private int platformCommissionPercent;
 
@@ -42,13 +45,15 @@ public class PurchaseServiceImpl implements PurchaseService {
                                UserRepository userRepository,
                                EarningRepository earningRepository,
                                NotificationService notificationService,
-                               NoteService noteService) {
+                               NoteService noteService,
+                               PlatformConfigService platformConfigService) {
         this.purchaseRepository  = purchaseRepository;
         this.noteRepository      = noteRepository;
         this.userRepository      = userRepository;
         this.earningRepository   = earningRepository;
         this.notificationService = notificationService;
         this.noteService         = noteService;
+        this.platformConfigService = platformConfigService;
     }
 
     @Override
@@ -81,10 +86,12 @@ public class PurchaseServiceImpl implements PurchaseService {
             throw new BadRequestException("You cannot purchase your own note");
         }
 
-        // ── Revenue split ──────────────────────────────────────
+        // ── Revenue split (live, admin-adjustable via platform_config) ─────────
+        int commissionPercent = platformConfigService.getInt(
+                "platform-commission-percent", platformCommissionPercent);
         BigDecimal amount        = note.getPrice();
         BigDecimal platformShare = amount
-                .multiply(BigDecimal.valueOf(platformCommissionPercent))
+                .multiply(BigDecimal.valueOf(commissionPercent))
                 .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
         BigDecimal sellerShare   = amount.subtract(platformShare);
 

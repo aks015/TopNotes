@@ -120,4 +120,13 @@ public class BuyerController {
         Page<ReviewResponse> reviews = reviewService.getNoteReviews(noteId, pageable);
         return ResponseEntity.ok(ApiResponse.success(reviews));
     }
+
+    @GetMapping("/notes/{noteId}/my-review")
+    @Operation(summary = "The current buyer's own review for a note (null if none) — used to edit")
+    public ResponseEntity<ApiResponse<ReviewResponse>> myReview(
+            @PathVariable Long noteId,
+            @AuthenticationPrincipal CustomUserDetails principal) {
+
+        return ResponseEntity.ok(ApiResponse.success(reviewService.getMyReview(noteId, principal.getId())));
+    }
 }

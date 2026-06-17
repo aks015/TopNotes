@@ -21,6 +21,21 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Page<User> findByRole(UserRole role, Pageable pageable);
 
+    /** Admin user search: optional role + status + keyword over name/email — all server-side. */
+    @Query("""
+            SELECT u FROM User u
+            WHERE (:allRole = TRUE OR u.role = :role)
+              AND (:allStatus = TRUE OR u.status = :status)
+              AND (:keyword = '' OR LOWER(u.fullName) LIKE CONCAT('%', :keyword, '%')
+                                 OR LOWER(u.email)    LIKE CONCAT('%', :keyword, '%'))
+            """)
+    Page<User> searchUsers(@Param("allRole") boolean allRole,
+                           @Param("role") UserRole role,
+                           @Param("allStatus") boolean allStatus,
+                           @Param("status") UserStatus status,
+                           @Param("keyword") String keyword,
+                           Pageable pageable);
+
     Page<User> findByRoleAndStatus(UserRole role, UserStatus status, Pageable pageable);
 
     long countByRole(UserRole role);

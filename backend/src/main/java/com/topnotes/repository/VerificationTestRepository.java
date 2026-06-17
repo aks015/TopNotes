@@ -11,4 +11,9 @@ public interface VerificationTestRepository extends JpaRepository<VerificationTe
     List<VerificationTest> findBySellerIdOrderByAttemptedAtDesc(Long sellerId);
     long countBySellerId(Long sellerId);
     boolean existsBySellerIdAndPassedTrue(Long sellerId);
+
+    // ── Per-category (Phase 2+) ──
+    long countBySellerIdAndCategoryId(Long sellerId, Long categoryId);
+    long countByCategoryId(Long categoryId);
+    long countByCategoryIdAndPassedTrue(Long categoryId);
 }

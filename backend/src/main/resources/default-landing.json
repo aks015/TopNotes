@@ -1,0 +1,112 @@
+{
+  "hero": {
+    "enabled": true,
+    "trustBadge": "Every seller is marksheet-verified",
+    "headline": "Study from the notes that ==cracked== the exam.",
+    "highlightColor": "",
+    "subtitle": "Handwritten notes from verified toppers of JEE, NEET & Boards — rank-checked, reviewed page by page, and in your hands instantly.",
+    "ctaPrimary": "Browse notes",
+    "ctaPrimaryLink": "/browse",
+    "ctaSecondary": "Become a seller",
+    "ctaSecondaryLink": "/register",
+    "badgeVerified": "Marksheet verified",
+    "handwritingNote": "real handwriting ↓"
+  },
+  "marquee": {
+    "enabled": true,
+    "separator": "✦",
+    "speed": "medium",
+    "includeCoverage": true,
+    "items": ["Verified toppers", "Handwritten notes", "Instant access", "Rank-checked"]
+  },
+  "notesPreview": {
+    "enabled": true,
+    "eyebrow": "fresh from the toppers' desks",
+    "heading": "Trending notes this week",
+    "linkText": "View all notes",
+    "linkHref": "/browse",
+    "count": 4,
+    "sort": "featured"
+  },
+  "howItWorks": {
+    "enabled": true,
+    "eyebrow": "simple on both sides",
+    "heading": "How it works",
+    "buyerLabel": "For students",
+    "sellerLabel": "For toppers",
+    "buyer": [
+      { "title": "Browse", "desc": "Find verified notes by subject, exam and topper rank." },
+      { "title": "Pay securely", "desc": "UPI or cards via Cashfree — access is instant." },
+      { "title": "Read", "desc": "Secure in-app viewer, watermarked to you." }
+    ],
+    "seller": [
+      { "title": "Get verified", "desc": "Pass a quick test and upload your marksheet." },
+      { "title": "Upload notes", "desc": "Add your handwritten notes with a cover." },
+      { "title": "Earn", "desc": "Get paid to your UPI on every single sale." }
+    ]
+  },
+  "features": {
+    "enabled": true,
+    "eyebrow": "no coaching-mafia PDFs here",
+    "heading": "Why TopNotes",
+    "items": [
+      { "icon": "shield-check", "title": "Verified toppers only", "desc": "Every seller passes an academic test plus a marksheet review. No fakes, no reposts." },
+      { "icon": "file-text", "title": "Exam-focused notes", "desc": "Handwritten, concise, and made for JEE, NEET and Boards — not generic theory dumps." },
+      { "icon": "lock", "title": "Secure viewer", "desc": "Watermarked and screenshot-deterred. Toppers' work stays protected." },
+      { "icon": "zap", "title": "Instant access", "desc": "Start reading the moment your payment succeeds. No waiting, no email links." },
+      { "icon": "wallet", "title": "Fair payouts", "desc": "Toppers earn on every download, paid straight to UPI. Effort gets rewarded." },
+      { "icon": "search", "title": "Subject-wise", "desc": "Physics, Chemistry, Maths, Biology — filtered by chapter, exam and rank." }
+    ]
+  },
+  "testimonials": {
+    "enabled": true,
+    "eyebrow": "don't take our word for it",
+    "heading": "Loved by aspirants",
+    "items": [
+      { "name": "Riya S.", "exam": "JEE 2025", "rating": 5, "quote": "Exactly what I needed — concise, and from someone who actually cleared JEE." },
+      { "name": "Aman K.", "exam": "NEET 2025", "rating": 5, "quote": "Biology notes saved me weeks. The diagrams are gold." },
+      { "name": "Dev P.", "exam": "Boards 2025", "rating": 5, "quote": "Secure viewer is smooth and the content quality is genuinely top-tier." }
+    ]
+  },
+  "founders": {
+    "enabled": true,
+    "eyebrow": "why we built this",
+    "heading": "Built by students, for students",
+    "story": "We struggled to find good notes for our own exams — toppers' handwritten notes are the most valuable resource, but they're scattered everywhere. So we built a trusted marketplace for them.",
+    "items": [
+      { "name": "Aman Singh Tomar", "role": "Co-founder — CTO", "bio": "Designs and builds the product experience.", "photoUrl": "https://res.cloudinary.com/dttwefsmg/image/upload/v1781592825/topnotes/profiles/nn4ugaa5pqtj9j4zywws.png", "linkedin": "https://www.linkedin.com/in/aman-singh-tomar-370463170/" },
+      { "name": "Akshat Nigam", "role": "Co-founder — CEO", "bio": "Builds and runs the platform.", "photoUrl": "https://res.cloudinary.com/dttwefsmg/image/upload/v1781592719/topnotes/profiles/nz6adnj8aavyos1wpzc9.jpg", "linkedin": "https://www.linkedin.com/in/akshat-nigam-769669229" },
+      { "name": "Abhay Singh", "role": "Co-founder — COO", "bio": "Chief Operating Officer.", "photoUrl": "https://res.cloudinary.com/dttwefsmg/image/upload/v1781593052/topnotes/profiles/a5bz7abvhs4jxooc7yog.jpg", "linkedin": "https://www.linkedin.com/in/abhay-singh-978366221" }
+    ]
+  },
+  "faq": {
+    "enabled": true,
+    "eyebrow": "before you ask",
+    "heading": "Questions, answered",
+    "items": [
+      { "q": "Are the notes really from verified toppers?", "a": "Yes — every seller passes an academic test and uploads their marksheet, which our team reviews manually before they can publish a single page." },
+      { "q": "Is payment safe?", "a": "Payments run through Cashfree, a PCI-DSS compliant gateway. We support UPI, cards and netbanking — and we never store your payment details." },
+      { "q": "Can I download the notes?", "a": "Notes open in our secure in-app viewer, watermarked with your account. This protects toppers' work from piracy while giving you unlimited reading access." },
+      { "q": "Can I sell my own notes?", "a": "If you've cracked JEE, NEET or Boards with a strong rank — absolutely. Pass the quick verification test, upload your marksheet, and start earning on every sale." },
+      { "q": "What about refunds?", "a": "If a note is materially different from its preview and description, raise a ticket within 48 hours and we'll review it for a full refund." }
+    ]
+  },
+  "cta": {
+    "enabled": true,
+    "eyebrow": "from toppers, to you",
+    "title": "Start learning from India's toppers",
+    "subtitle": "Join 2,400+ verified toppers and thousands of aspirants already on TopNotes.",
+    "button": "Get started — it's free"
+  },
+  "footer": {
+    "tagline": "Verified, handwritten notes from real toppers — for JEE, NEET & Boards.",
+    "legalLine": "Verified toppers only",
+    "madeIn": "Made in India 🇮🇳",
+    "social": { "instagram": "", "x": "", "linkedin": "", "youtube": "" },
+    "columns": [
+      { "title": "Marketplace", "links": [ { "label": "Browse notes", "href": "/browse" }, { "label": "Become a seller", "href": "/register" } ] },
+      { "title": "Company", "links": [ { "label": "Founders", "href": "/#founders" }, { "label": "Contact", "href": "mailto:hello@topnotes.com" } ] },
+      { "title": "Legal", "links": [ { "label": "Terms", "href": "/terms" }, { "label": "Privacy", "href": "/privacy" } ] }
+    ]
+  }
+}

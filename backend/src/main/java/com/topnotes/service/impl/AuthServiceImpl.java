@@ -1,10 +1,11 @@
-package com.topnotes.service.impl;
+    package com.topnotes.service.impl;
 
 import com.topnotes.dto.request.LoginRequest;
 import com.topnotes.dto.request.RegisterRequest;
 import com.topnotes.dto.response.AuthResponse;
 import com.topnotes.entity.User;
 import com.topnotes.entity.enums.UserRole;
+import com.topnotes.entity.enums.UserStatus;
 import com.topnotes.exception.BadRequestException;
 import com.topnotes.repository.UserRepository;
 import com.topnotes.security.JwtUtil;
@@ -58,8 +59,7 @@ public class AuthServiceImpl implements AuthService {
         User saved = userRepository.save(user);
         log.info("User registered with id={}", saved.getId());
 
-        String token = jwtUtil.generateToken(saved.getEmail(), saved.getRole().name(), saved.getId());
-        return buildAuthResponse(saved, token);
+        return buildAuthResponse(saved);
     }
 
     @Override
@@ -73,9 +73,8 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new BadRequestException("User not found"));
 
-        String token = jwtUtil.generateToken(user.getEmail(), user.getRole().name(), user.getId());
         log.info("User id={} logged in successfully", user.getId());
-        return buildAuthResponse(user, token);
+        return buildAuthResponse(user);
     }
 
     @Override
@@ -93,17 +92,36 @@ public class AuthServiceImpl implements AuthService {
             log.info("User id={} upgraded BUYER -> SELLER", user.getId());
         }
 
-        // Re-issue the token so the new role/authority takes effect immediately.
-        String token = jwtUtil.generateToken(user.getEmail(), user.getRole().name(), user.getId());
-        return buildAuthResponse(user, token);
+        // Re-issue tokens so the new role/authority takes effect immediately.
+        return buildAuthResponse(user);
     }
 
     @Override
     public AuthResponse refreshToken(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BadRequestException("User not found"));
-        String token = jwtUtil.generateToken(user.getEmail(), user.getRole().name(), user.getId());
-        return buildAuthResponse(user, token);
+        return buildAuthResponse(user);
+    }
+
+    @Override
+    public AuthResponse refreshAccessToken(String refreshToken) {
+        if (refreshToken == null
+                || !jwtUtil.validateToken(refreshToken)
+                || !jwtUtil.isRefreshToken(refreshToken)) {
+            throw new BadRequestException("Session expired — please log in again");
+        }
+
+        String email = jwtUtil.extractEmail(refreshToken);
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new BadRequestException("User not found"));
+
+        // A suspended/deleted account must not be able to refresh its way back in.
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            throw new BadRequestException("Account is not active");
+        }
+
+        log.info("Refreshing access token for user id={}", user.getId());
+        return buildAuthResponse(user);
     }
 
     @Override
@@ -125,16 +143,65 @@ public class AuthServiceImpl implements AuthService {
         userRepository.save(user);
     }
 
+    @Override
+    @Transactional
+    public void changePassword(Long userId, String currentPassword, String newPassword) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BadRequestException("User not found"));
+        if (currentPassword == null || !passwordEncoder.matches(currentPassword, user.getPassword())) {
+            throw new BadRequestException("Current password is incorrect");
+        }
+        if (newPassword == null || newPassword.length() < 8) {
+            throw new BadRequestException("New password must be at least 8 characters");
+        }
+        if (passwordEncoder.matches(newPassword, user.getPassword())) {
+            throw new BadRequestException("New password must be different from the current one");
+        }
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+    }
+
+    @Override
+    @Transactional
+    public AuthResponse updateProfile(Long userId, String fullName, String phone) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BadRequestException("User not found"));
+        if (fullName == null || fullName.trim().length() < 2) {
+            throw new BadRequestException("Full name must be at least 2 characters");
+        }
+        if (phone == null || !phone.trim().matches("^[6-9]\\d{9}$")) {
+            throw new BadRequestException("Enter a valid 10-digit Indian mobile number");
+        }
+        user.setFullName(fullName.trim());
+        user.setPhone(phone.trim());
+        return buildAuthResponse(userRepository.save(user));
+    }
+
+    @Override
+    @Transactional
+    public AuthResponse setProfileImage(Long userId, String imageUrl) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BadRequestException("User not found"));
+        user.setProfileImageUrl(imageUrl);
+        return buildAuthResponse(userRepository.save(user));
+    }
+
     // ── Private helpers ───────────────────────────────────────
 
-    private AuthResponse buildAuthResponse(User user, String token) {
+    private AuthResponse buildAuthResponse(User user) {
+        String accessToken  = jwtUtil.generateToken(user.getEmail(), user.getRole().name(), user.getId());
+        String refreshToken = jwtUtil.generateRefreshToken(user.getEmail(), user.getId());
         return AuthResponse.builder()
                 .userId(user.getId())
                 .email(user.getEmail())
                 .fullName(user.getFullName())
+                .phone(user.getPhone())
+                .profileImageUrl(user.getProfileImageUrl())
                 .role(user.getRole())
                 .isVerified(user.getIsVerified())
-                .token(token)
+                .createdAt(user.getCreatedAt())
+                .token(accessToken)
+                .refreshToken(refreshToken)
                 .build();
     }
 }

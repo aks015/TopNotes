@@ -20,13 +20,22 @@ import java.time.LocalDateTime;
  *  - isActive           → Completely enable/disable the test requirement
  */
 @Entity
-@Table(name = "test_config")
+@Table(name = "test_config", uniqueConstraints = @UniqueConstraint(columnNames = "category_id"))
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class TestConfig {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /**
+     * Exam category this config applies to. NULL = the global "Default" config,
+     * used as a fallback for any category without its own row. Per-category
+     * qualification: each category can have its own test settings.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id")
+    private ExamCategory category;
 
     /** Minimum percentage score to pass (0–100). Default: 70 */
     @Column(nullable = false)

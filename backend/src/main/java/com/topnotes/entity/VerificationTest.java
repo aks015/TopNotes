@@ -29,6 +29,11 @@ public class VerificationTest {
     @JoinColumn(name = "seller_id", nullable = false)
     private User seller;
 
+    /** Exam category this attempt was for. NULL = legacy global attempt. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id")
+    private ExamCategory category;
+
     /** Percentage score (0–100). */
     @Column(nullable = false)
     private Integer score;

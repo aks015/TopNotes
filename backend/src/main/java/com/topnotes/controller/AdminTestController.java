@@ -4,6 +4,7 @@ import com.topnotes.dto.request.TestConfigRequest;
 import com.topnotes.dto.request.TestQuestionRequest;
 import com.topnotes.dto.response.ApiResponse;
 import com.topnotes.dto.response.TestConfigResponse;
+import com.topnotes.dto.response.TestOverviewResponse;
 import com.topnotes.dto.response.TestQuestionAdminResponse;
 import com.topnotes.service.TestManagementService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -57,18 +58,26 @@ public class AdminTestController {
     // TEST CONFIG
     // ══════════════════════════════════════════════════════════
 
+    @GetMapping("/overview")
+    @Operation(summary = "Per-category test health matrix (General + each category)")
+    public ResponseEntity<ApiResponse<List<TestOverviewResponse>>> getOverview() {
+        return ResponseEntity.ok(ApiResponse.success(testManagementService.getOverview()));
+    }
+
     @GetMapping("/config")
-    @Operation(summary = "Get current test configuration (pass score, time limit, shuffle, etc.)")
-    public ResponseEntity<ApiResponse<TestConfigResponse>> getConfig() {
-        return ResponseEntity.ok(ApiResponse.success(testManagementService.getConfig()));
+    @Operation(summary = "Get a category's test config (omit categoryId for the global Default)")
+    public ResponseEntity<ApiResponse<TestConfigResponse>> getConfig(
+            @RequestParam(required = false) Long categoryId) {
+        return ResponseEntity.ok(ApiResponse.success(testManagementService.getConfig(categoryId)));
     }
 
     @PutMapping("/config")
-    @Operation(summary = "Update test configuration — all fields required")
+    @Operation(summary = "Update a category's test config (omit categoryId for the global Default)")
     public ResponseEntity<ApiResponse<TestConfigResponse>> updateConfig(
+            @RequestParam(required = false) Long categoryId,
             @Valid @RequestBody TestConfigRequest request) {
 
-        TestConfigResponse updated = testManagementService.updateConfig(request);
+        TestConfigResponse updated = testManagementService.updateConfig(categoryId, request);
         return ResponseEntity.ok(ApiResponse.success("Test configuration updated successfully", updated));
     }
 
@@ -77,15 +86,16 @@ public class AdminTestController {
     // ══════════════════════════════════════════════════════════
 
     @GetMapping("/questions")
-    @Operation(summary = "Get paginated list of all questions. Use ?keyword= to search.")
-    public ResponseEntity<ApiResponse<Page<TestQuestionAdminResponse>>> getAllQuestions(
+    @Operation(summary = "Questions in a category's pool (omit categoryId for the General/shared pool). ?keyword= to search.")
+    public ResponseEntity<ApiResponse<Page<TestQuestionAdminResponse>>> getQuestions(
+            @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "0")  int page,
             @RequestParam(defaultValue = "20") int size) {
 
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "displayOrder"));
         return ResponseEntity.ok(ApiResponse.success(
-                testManagementService.getAllQuestions(keyword, pageable)));
+                testManagementService.getQuestions(categoryId, keyword, pageable)));
     }
 
     @GetMapping("/questions/{id}")
