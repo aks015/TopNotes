@@ -36,13 +36,13 @@ public interface PayoutRepository extends JpaRepository<PayoutRequest, Long> {
 
     /**
      * Admin payout list with optional status filter + keyword (seller name or UPI).
-     * A null status returns every state; a null/blank keyword skips the text match.
+     * A null status returns every state; a blank keyword skips the text match.
      * Ordering comes from the Pageable so the controller can keep PENDING FIFO.
      */
     @Query("""
             SELECT p FROM PayoutRequest p
             WHERE (:status IS NULL OR p.status = :status)
-              AND (:kw IS NULL OR LOWER(p.seller.fullName) LIKE CONCAT('%', :kw, '%')
+              AND (:kw = '' OR LOWER(p.seller.fullName) LIKE CONCAT('%', :kw, '%')
                                OR LOWER(p.upiId)           LIKE CONCAT('%', :kw, '%'))
             """)
     Page<PayoutRequest> search(@Param("status") PayoutStatus status,
