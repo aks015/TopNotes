@@ -63,3 +63,52 @@ The frontend uses TypeScript path aliases (configured in [frontend/tsconfig.json
 | `@env/*` | `src/environments/*` |
 
 Use these instead of deep relative paths, e.g. `import { ApiService } from '@core/services/api.service';`
+
+---
+
+## UPI Subscription Payments (no payment gateway)
+
+Direct UPI payments to your personal bank account — no Razorpay/Cashfree/PayU required.
+
+### Configure your UPI ID
+
+Set in `backend/src/main/resources/application.properties` or via environment variables:
+
+```properties
+app.upi.id=yourname@paytm
+app.upi.merchant-name=Your Name
+```
+
+Or: `UPI_ID`, `UPI_MERCHANT_NAME`
+
+### Web UI (Thymeleaf + Bootstrap 5)
+
+| URL | Description |
+|-----|-------------|
+| `/api/web/subscription/plans` | Browse subscription plans |
+| `/api/web/login` | Sign in (form login for web UI) |
+| `/api/web/subscription/pay/{planId}` | Ketto-style UPI payment modal with QR |
+| `/api/web/subscription/dashboard` | User dashboard — status, history, pending |
+| `/api/web/admin/payments` | Admin verification dashboard |
+
+### REST API (JWT — for Angular/mobile)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/subscription/plans` | List plans (public) |
+| POST | `/api/subscription/pay/{planId}` | Initiate payment, get QR |
+| POST | `/api/subscription/payment/submit` | Submit UTR proof |
+| GET | `/api/subscription/dashboard` | User subscription dashboard |
+| GET | `/api/admin/payments/dashboard` | Admin stats |
+| GET | `/api/admin/payments?status=&utr=` | Search payments |
+| POST | `/api/admin/payments/{id}/approve` | Approve & activate subscription |
+| POST | `/api/admin/payments/{id}/reject` | Reject payment |
+
+### Flow
+
+1. User selects a plan → payment modal opens with dynamic UPI QR
+2. User pays via GPay / PhonePe / Paytm / BHIM / Amazon Pay
+3. User submits UTR, name, and mobile → status **PENDING**
+4. Admin verifies in dashboard → **Approve** activates subscription instantly
+
+SQL reference schema: `backend/src/main/resources/subscription_schema.sql`

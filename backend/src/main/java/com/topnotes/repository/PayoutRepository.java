@@ -42,8 +42,8 @@ public interface PayoutRepository extends JpaRepository<PayoutRequest, Long> {
     @Query("""
             SELECT p FROM PayoutRequest p
             WHERE (:status IS NULL OR p.status = :status)
-              AND (:kw IS NULL OR LOWER(p.seller.fullName) LIKE LOWER(CONCAT('%', :kw, '%'))
-                               OR LOWER(p.upiId)           LIKE LOWER(CONCAT('%', :kw, '%')))
+              AND (:kw IS NULL OR LOWER(p.seller.fullName) LIKE CONCAT('%', :kw, '%')
+                               OR LOWER(p.upiId)           LIKE CONCAT('%', :kw, '%'))
             """)
     Page<PayoutRequest> search(@Param("status") PayoutStatus status,
                                @Param("kw") String kw,

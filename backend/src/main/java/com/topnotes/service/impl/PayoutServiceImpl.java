@@ -142,7 +142,7 @@ public class PayoutServiceImpl implements PayoutService {
     @Override
     @Transactional(readOnly = true)
     public Page<PayoutResponse> getPayouts(PayoutStatus status, String keyword, Pageable pageable) {
-        String kw = (keyword == null || keyword.isBlank()) ? null : keyword.trim();
+        String kw = (keyword == null || keyword.isBlank()) ? null : keyword.trim().toLowerCase();
         return payoutRepository.search(status, kw, pageable).map(this::toResponse);
     }
 
