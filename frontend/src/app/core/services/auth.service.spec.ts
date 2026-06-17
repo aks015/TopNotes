@@ -53,14 +53,14 @@ describe('AuthService', () => {
     expect(service.isLoggedIn()).toBe(false);
   });
 
-  it('logout() clears storage and navigates to /login', () => {
+  it('logout() clears storage and navigates to the landing page', () => {
     http.post.mockReturnValue(of(ok(authResponse('BUYER'))));
     service.login('a', 'b').subscribe();
 
     service.logout();
     expect(service.user()).toBeNull();
     expect(localStorage.getItem('tn_token')).toBeNull();
-    expect(router.navigate).toHaveBeenCalledWith(['/login']);
+    expect(router.navigate).toHaveBeenCalledWith(['/']);
   });
 
   it('navigateAfterLogin() routes by role', () => {

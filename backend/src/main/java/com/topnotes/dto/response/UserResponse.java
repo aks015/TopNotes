@@ -25,5 +25,7 @@ public class UserResponse {
     private Boolean       testPassed;
     private Integer       testScore;
     private Boolean       marksheetApproved;
+    /** Uploaded marksheet image URL — for admin verification review. */
+    private String        marksheetUrl;
     private LocalDateTime createdAt;
 }

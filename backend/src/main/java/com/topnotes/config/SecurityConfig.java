@@ -2,6 +2,7 @@ package com.topnotes.config;
 
 import com.topnotes.security.JwtAuthFilter;
 import com.topnotes.security.UserDetailsServiceImpl;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -62,11 +63,22 @@ public class SecurityConfig {
                 .requestMatchers("/health").permitAll()
                 // Payment gateway webhooks are authenticated by signature, not JWT
                 .requestMatchers("/payments/webhook/**").permitAll()
+                // Public landing-page content (admin edits via /admin/content/**)
+                .requestMatchers(HttpMethod.GET, "/content/**").permitAll()
+                // Public exam taxonomy (admin edits via /admin/taxonomy/**)
+                .requestMatchers(HttpMethod.GET, "/taxonomy").permitAll()
+                // Public social-proof stats for the landing page
+                .requestMatchers(HttpMethod.GET, "/stats/social").permitAll()
                 .requestMatchers(HttpMethod.GET,
                         "/notes",
                         "/notes/{id}",
                         "/notes/{id}/preview",
-                        "/notes/filters").permitAll()
+                        "/notes/filters",
+                        "/notes/price-suggestion",
+                        "/notes/{id}/reviews",
+                        "/notes/{id}/reviews/stats").permitAll()
+                // Public seller profiles (the "/u/{id}" page)
+                .requestMatchers(HttpMethod.GET, "/sellers/{id}", "/sellers/{id}/notes").permitAll()
                 // Swagger UI
                 .requestMatchers(
                         "/swagger-ui/**",
@@ -87,6 +99,8 @@ public class SecurityConfig {
 
                 // ── Note mutations require SELLER ──────────
                 .requestMatchers(HttpMethod.POST,   "/notes").hasRole("SELLER")
+                .requestMatchers(HttpMethod.POST,   "/notes/**").hasRole("SELLER")
+                .requestMatchers(HttpMethod.PUT,    "/notes/**").hasRole("SELLER")
                 .requestMatchers(HttpMethod.PATCH,  "/notes/**").hasRole("SELLER")
                 .requestMatchers(HttpMethod.DELETE, "/notes/**").hasRole("SELLER")
 
@@ -97,11 +111,33 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
             )
 
+            // Distinguish "not authenticated" (401) from "authenticated but
+            // forbidden" (403). Without this Spring's default returns 403 for
+            // BOTH, so the SPA can't tell an expired/invalid token from a real
+            // permission denial and never clears the stale session.
+            .exceptionHandling(ex -> ex
+                .authenticationEntryPoint((req, res, e) ->
+                        writeError(res, HttpServletResponse.SC_UNAUTHORIZED,
+                                "Authentication required — please log in again."))
+                .accessDeniedHandler((req, res, e) ->
+                        writeError(res, HttpServletResponse.SC_FORBIDDEN,
+                                "You don't have permission to do that."))
+            )
+
             // Inject JWT filter before username/password filter
             .authenticationProvider(authenticationProvider())
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    /** Writes a minimal ApiResponse-shaped JSON error body with the given status. */
+    private static void writeError(HttpServletResponse res, int status, String message)
+            throws java.io.IOException {
+        res.setStatus(status);
+        res.setContentType("application/json");
+        res.setCharacterEncoding("UTF-8");
+        res.getWriter().write("{\"success\":false,\"message\":\"" + message + "\"}");
     }
 
     @Bean

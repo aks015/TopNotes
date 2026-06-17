@@ -3,6 +3,7 @@ package com.topnotes.controller;
 import com.topnotes.dto.request.ConfigUpdateRequest;
 import com.topnotes.dto.response.*;
 import com.topnotes.entity.enums.UserRole;
+import com.topnotes.entity.enums.UserStatus;
 import com.topnotes.security.CustomUserDetails;
 import com.topnotes.service.AdminService;
 import com.topnotes.service.DashboardService;
@@ -61,12 +62,14 @@ public class AdminController {
     @GetMapping("/users")
     @Operation(summary = "Get paginated list of all users with optional role filter")
     public ResponseEntity<ApiResponse<Page<UserResponse>>> getUsers(
-            @RequestParam(required = false) UserRole role,
+            @RequestParam(required = false) UserRole   role,
+            @RequestParam(required = false) UserStatus status,
+            @RequestParam(required = false) String     keyword,
             @RequestParam(defaultValue = "0")  int page,
             @RequestParam(defaultValue = "20") int size) {
 
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        return ResponseEntity.ok(ApiResponse.success(adminService.getUsers(role, pageable)));
+        return ResponseEntity.ok(ApiResponse.success(adminService.getUsers(role, status, keyword, pageable)));
     }
 
     @GetMapping("/users/{id}")

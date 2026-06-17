@@ -1,6 +1,5 @@
 package com.topnotes.dto.request;
 
-import com.topnotes.entity.enums.ExamType;
 import jakarta.validation.constraints.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -20,13 +19,21 @@ public class NoteCreateRequest {
     @Size(min = 20, max = 5000, message = "Description must be between 20 and 5000 characters")
     private String description;
 
-    @Size(max = 60, message = "Class level must not exceed 60 characters")
-    private String classLevel;
+    @NotBlank(message = "Exam category is required")
+    @Size(max = 100, message = "Category must not exceed 100 characters")
+    private String category;
 
-    @Size(max = 100, message = "Subject must not exceed 100 characters")
+    @NotBlank(message = "Exam is required")
+    @Size(max = 120, message = "Exam must not exceed 120 characters")
+    private String exam;
+
+    @NotBlank(message = "Subject is required")
+    @Size(max = 120, message = "Subject must not exceed 120 characters")
     private String subject;
 
-    private ExamType examType;
+    /** Optional level/stage, e.g. "Class 12", "Prelims", "Foundation". */
+    @Size(max = 60, message = "Level must not exceed 60 characters")
+    private String level;
 
     @NotNull(message = "Price is required")
     @DecimalMin(value = "1.00", message = "Price must be at least ₹1")

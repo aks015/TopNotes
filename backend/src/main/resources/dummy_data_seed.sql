@@ -16,7 +16,7 @@ SET @pwd = '$2a$12$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy';
 
 -- Admin (password = "Admin@123")
 INSERT IGNORE INTO users (email, password, full_name, role, status, is_verified, test_passed, marksheet_approved, created_at, updated_at)
-VALUES ('admin@topnotes.com', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4QA1iBFW7G', 'Platform Admin', 'ADMIN', 'ACTIVE', 1, 1, 1, NOW(), NOW());
+VALUES ('admin@topnotes.com', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4QA1iBFW7G', 'Admin', 'ADMIN', 'ACTIVE', 1, 1, 1, NOW(), NOW());
 
 -- ── Verified Sellers (can upload notes) ──
 INSERT IGNORE INTO users (email, password, full_name, phone, role, status, is_verified, test_passed, test_score, marksheet_approved, class_level, institution, bio, created_at, updated_at) VALUES
@@ -151,15 +151,15 @@ INSERT INTO earnings (seller_id, purchase_id, amount, is_paid, earned_at)
 SELECT seller_id, id, seller_share, 0, purchased_at FROM purchases;
 
 -- ─── 6. REVIEWS ───────────────────────────────────────
-INSERT INTO reviews (buyer_id, note_id, rating, comment, created_at) VALUES
-(@b1, @n1,  5, 'Absolutely brilliant notes! The diagrams are super clear and the explanations are better than my coaching institute. Scored 98 in Physics thanks to these notes!', '2024-01-20 10:00:00'),
-(@b3, @n1,  5, 'Best Physics notes I have ever bought. All derivations are crystal clear with color coding. Worth every rupee!', '2024-01-22 14:30:00'),
-(@b1, @n4,  5, 'Priya di ke notes are just amazing! Human physiology was my weakest topic but after these notes I scored full marks in NEET mock test. Must buy!', '2024-01-18 16:00:00'),
-(@b4, @n4,  5, 'Diagrams are hand-drawn but extremely clear. Better than printed books because you can see the thinking process. Highly recommend for NEET aspirants.', '2024-01-24 09:15:00'),
-(@b2, @n6,  5, 'All name reactions in one place with proper mechanism. The color coding makes it very easy to understand. My organic chemistry grade jumped from B to A.', '2024-01-21 15:30:00'),
-(@b5, @n6,  4, 'Very good notes overall. Covers all important reactions. Could have included more practice problems but the theory is excellent.', '2024-01-25 11:00:00'),
-(@b1, @n12, 5, 'Vikram bhai ke notes are legendary in my coaching batch. Mechanics problems that seemed impossible became easy after reading these. AIR improvement guaranteed!', '2024-01-23 13:00:00'),
-(@b2, @n12, 4, 'Excellent coverage of rotational dynamics which is usually weak in textbooks. Some typos here and there but overall very good quality.', '2024-01-26 10:30:00');
+-- No dummy reviews. Reviews are created only by real buyers through the app.
+-- Notes therefore start with no rating; review_count/average_rating stay 0
+-- until genuine reviews arrive (UI shows "New" until then).
+UPDATE notes SET average_rating = 0, review_count = 0;
+
+-- Keep the denormalised sales counter in sync with the real purchase rows above,
+-- so "Notes sold" on the dashboard and Manage-notes match actual purchases.
+UPDATE notes n SET purchase_count =
+    (SELECT COUNT(*) FROM purchases p WHERE p.note_id = n.id AND p.status = 'COMPLETED');
 
 -- ─── 7. NOTIFICATIONS ─────────────────────────────────
 SET @seller1 = (SELECT id FROM users WHERE email = 'aarav.patel@email.com');

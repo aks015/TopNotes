@@ -61,12 +61,12 @@ VALUES
 
 -- Question 1
 INSERT INTO test_questions (question_text, subject, display_order, is_active, created_at, updated_at)
-VALUES ('What is the derivative of x²?', 'Mathematics', 1, TRUE, NOW(), NOW());
+VALUES ('What is the derivative of x^2?', 'Mathematics', 1, TRUE, NOW(), NOW());
 
 SET @q1 = LAST_INSERT_ID();
 INSERT INTO test_options (question_id, option_key, option_text, is_correct) VALUES
     (@q1, 'A', '2x',  TRUE),
-    (@q1, 'B', 'x²',  FALSE),
+    (@q1, 'B', 'x^2',  FALSE),
     (@q1, 'C', 'x',   FALSE),
     (@q1, 'D', '2',   FALSE);
 
@@ -98,14 +98,14 @@ VALUES ('What is the chemical formula of water?', 'Chemistry', 4, TRUE, NOW(), N
 
 SET @q4 = LAST_INSERT_ID();
 INSERT INTO test_options (question_id, option_key, option_text, is_correct) VALUES
-    (@q4, 'A', 'H₂O₂', FALSE),
-    (@q4, 'B', 'H₂O',  TRUE),
+    (@q4, 'A', 'H2O2', FALSE),
+    (@q4, 'B', 'H2O',  TRUE),
     (@q4, 'C', 'HO',   FALSE),
-    (@q4, 'D', 'H₃O',  FALSE);
+    (@q4, 'D', 'H3O',  FALSE);
 
 -- Question 5
 INSERT INTO test_questions (question_text, subject, display_order, is_active, created_at, updated_at)
-VALUES ('Approximate value of π (pi)?', 'Mathematics', 5, TRUE, NOW(), NOW());
+VALUES ('Approximate value of pi?', 'Mathematics', 5, TRUE, NOW(), NOW());
 
 SET @q5 = LAST_INSERT_ID();
 INSERT INTO test_options (question_id, option_key, option_text, is_correct) VALUES
@@ -120,10 +120,10 @@ VALUES ('Speed of light in vacuum?', 'Physics', 6, TRUE, NOW(), NOW());
 
 SET @q6 = LAST_INSERT_ID();
 INSERT INTO test_options (question_id, option_key, option_text, is_correct) VALUES
-    (@q6, 'A', '3 × 10⁸ m/s',  TRUE),
-    (@q6, 'B', '3 × 10⁶ m/s',  FALSE),
-    (@q6, 'C', '3 × 10¹⁰ m/s', FALSE),
-    (@q6, 'D', '3 × 10⁴ m/s',  FALSE);
+    (@q6, 'A', '3 x 10^8 m/s',  TRUE),
+    (@q6, 'B', '3 x 10^6 m/s',  FALSE),
+    (@q6, 'C', '3 x 10^10 m/s', FALSE),
+    (@q6, 'D', '3 x 10^4 m/s',  FALSE);
 
 -- Question 7
 INSERT INTO test_questions (question_text, subject, display_order, is_active, created_at, updated_at)
@@ -142,10 +142,10 @@ VALUES ('Photosynthesis primarily produces?', 'Biology', 8, TRUE, NOW(), NOW());
 
 SET @q8 = LAST_INSERT_ID();
 INSERT INTO test_options (question_id, option_key, option_text, is_correct) VALUES
-    (@q8, 'A', 'CO₂ and H₂O',  FALSE),
-    (@q8, 'B', 'O₂ and Glucose', TRUE),
-    (@q8, 'C', 'N₂ and O₂',    FALSE),
-    (@q8, 'D', 'H₂ and CO₂',   FALSE);
+    (@q8, 'A', 'CO2 and H2O',  FALSE),
+    (@q8, 'B', 'O2 and Glucose', TRUE),
+    (@q8, 'C', 'N2 and O2',    FALSE),
+    (@q8, 'D', 'H2 and CO2',   FALSE);
 
 -- Question 9
 INSERT INTO test_questions (question_text, subject, display_order, is_active, created_at, updated_at)
@@ -154,9 +154,9 @@ VALUES ('According to Ohm''s Law, V equals?', 'Physics', 9, TRUE, NOW(), NOW());
 SET @q9 = LAST_INSERT_ID();
 INSERT INTO test_options (question_id, option_key, option_text, is_correct) VALUES
     (@q9, 'A', 'I / R', FALSE),
-    (@q9, 'B', 'I × R', TRUE),
+    (@q9, 'B', 'I x R', TRUE),
     (@q9, 'C', 'I + R', FALSE),
-    (@q9, 'D', 'I − R', FALSE);
+    (@q9, 'D', 'I - R', FALSE);
 
 -- Question 10
 INSERT INTO test_questions (question_text, subject, display_order, is_active, created_at, updated_at)

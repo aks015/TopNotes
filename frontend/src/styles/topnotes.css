@@ -77,9 +77,12 @@ a { color: var(--indigo-600); }
 ::selection { background: var(--indigo-100); }
 
 /* ---------- Logo ---------- */
-.tn-logo { display: inline-flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font-weight: 800; font-size: var(--t-20); letter-spacing: -.01em; }
-.tn-logo .mark { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; background: linear-gradient(150deg, var(--indigo-600), var(--indigo-800)); color: #fff; font-weight: 800; font-size: var(--t-20); box-shadow: var(--sh-xs); }
-.tn-logo .mark span { transform: translateY(-1px); }
+/* The mark itself is the shared <app-logo> component; these rules style the
+   wordmark when it is rendered separately (e.g. sidebar, where collapse
+   animates .logo-text away). */
+.tn-logo { display: inline-flex; align-items: center; gap: 9px; color: var(--ink); text-decoration: none; }
+.tn-logo .logo-text { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: var(--t-20); letter-spacing: -.03em; line-height: 1; }
+.tn-logo .dot { font-style: normal; color: #f5a524; }
 
 /* ---------- Buttons ---------- */
 .btn { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font: inherit; font-weight: 700; font-size: var(--t-14); height: 40px; padding: 0 18px; border: 1px solid transparent; border-radius: var(--r-ctrl); cursor: pointer; white-space: nowrap; transition: background var(--ease), color var(--ease), border-color var(--ease), transform var(--ease), box-shadow var(--ease); }

@@ -47,11 +47,15 @@ public class AdminServiceImpl implements AdminService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<UserResponse> getUsers(UserRole roleFilter, Pageable pageable) {
-        Page<User> users = (roleFilter != null)
-                ? userRepository.findByRole(roleFilter, pageable)
-                : userRepository.findAll(pageable);
-        return users.map(this::toUserResponse);
+    public Page<UserResponse> getUsers(UserRole roleFilter, UserStatus statusFilter, String keyword, Pageable pageable) {
+        String kw = keyword == null ? "" : keyword.trim().toLowerCase();
+        boolean allRole = roleFilter == null;
+        boolean allStatus = statusFilter == null;
+        return userRepository
+                .searchUsers(allRole, allRole ? UserRole.BUYER : roleFilter,
+                             allStatus, allStatus ? UserStatus.ACTIVE : statusFilter,
+                             kw, pageable)
+                .map(this::toUserResponse);
     }
 
     @Override
@@ -150,6 +154,7 @@ public class AdminServiceImpl implements AdminService {
                 .testPassed(u.getTestPassed())
                 .testScore(u.getTestScore())
                 .marksheetApproved(u.getMarksheetApproved())
+                .marksheetUrl(u.getMarksheetUrl())
                 .createdAt(u.getCreatedAt())
                 .build();
     }

@@ -18,7 +18,7 @@ import java.util.Map;
 @Slf4j
 public class FileUploadUtil {
 
-    private static final long MAX_PDF_SIZE_BYTES = 15 * 1024 * 1024; // 15MB
+    private static final long MAX_PDF_SIZE_BYTES = 50 * 1024 * 1024; // 50MB (matches the upload UI + multipart limit)
     private static final long MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 
     private static final List<String> ALLOWED_PDF_TYPES   = List.of("application/pdf");
@@ -46,6 +46,18 @@ public class FileUploadUtil {
     public String storeThumbnail(MultipartFile file) throws IOException {
         validateFile(file, ALLOWED_IMAGE_TYPES, MAX_IMAGE_SIZE_BYTES, "thumbnail image");
         return uploadToCloudinary(file, "topnotes/thumbnails", "image");
+    }
+
+    /** Stores raw generated image bytes (e.g. a rendered PDF cover) to Cloudinary. */
+    public String storeGeneratedThumbnail(byte[] imageBytes) throws IOException {
+        ensureCloudinaryConfigured();
+        Map params = ObjectUtils.asMap("folder", "topnotes/thumbnails", "resource_type", "image");
+        try {
+            Map result = cloudinary.uploader().upload(imageBytes, params);
+            return (String) result.get("secure_url");
+        } catch (RuntimeException e) {
+            throw new BadRequestException("Failed to upload generated cover: " + e.getMessage());
+        }
     }
 
     /** Validates and stores a marksheet image to Cloudinary. */

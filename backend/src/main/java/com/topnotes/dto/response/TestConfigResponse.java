@@ -9,6 +9,9 @@ import java.time.LocalDateTime;
 @Getter @Builder
 public class TestConfigResponse {
     private Long    id;
+    /** Category this config is for. null = the global Default config. */
+    private Long    categoryId;
+    private String  categoryName;
     private Integer passScorePercent;
     private Integer timeLimitMinutes;
     private Integer maxAttempts;

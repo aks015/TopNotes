@@ -68,13 +68,17 @@ public class DashboardServiceImpl implements DashboardService {
         List<Map<String, Object>> dailyChart   = buildDailyChart(now.minusDays(30), now);
         List<Map<String, Object>> monthlyChart = buildMonthlyChart(LocalDate.now().getYear());
 
+        // "Users" = real marketplace accounts (buyers + sellers); admin/staff excluded.
+        long sellers = userRepository.countByRole(UserRole.SELLER);
+        long buyers  = userRepository.countByRole(UserRole.BUYER);
+
         return DashboardResponse.builder()
                 .totalRevenue(totalRevenue)
                 .platformRevenue(platformRev)
                 .sellerRevenue(sellerRev)
-                .totalUsers(userRepository.count())
-                .totalSellers(userRepository.countByRole(UserRole.SELLER))
-                .totalBuyers(userRepository.countByRole(UserRole.BUYER))
+                .totalUsers(sellers + buyers)
+                .totalSellers(sellers)
+                .totalBuyers(buyers)
                 .totalNotes(noteRepository.countByStatus(NoteStatus.ACTIVE))
                 .totalPurchases(purchaseRepository.count())
                 .todayRevenue(todayRevenue)
@@ -101,7 +105,7 @@ public class DashboardServiceImpl implements DashboardService {
 
         List<Map<String, Object>> salesChart = buildDailyChartForSeller(sellerId, now.minusDays(30), now);
 
-        // Recent notes (up to 5, newest first)
+        // Recent notes (up to 5, newest first) — for the recent-notes widget only
         Pageable recentPageable = PageRequest.of(0, 5, Sort.by(Sort.Direction.DESC, "createdAt"));
         List<NoteResponse> recentNotes = noteRepository
                 .findBySellerId(sellerId, recentPageable)
@@ -109,22 +113,16 @@ public class DashboardServiceImpl implements DashboardService {
                 .map(n -> noteService.toResponse(n, null))
                 .toList();
 
-        long totalSales = recentNotes.stream()
-                .mapToLong(n -> n.getPurchaseCount() != null ? n.getPurchaseCount() : 0)
-                .sum();
+        // True sales = completed purchase rows for this seller (denormalised
+        // note.purchaseCount counters are unreliable seed data, so ignore them).
+        long totalSales = purchaseRepository.countCompletedBySellerId(sellerId);
 
-        // Average rating across all seller notes
-        BigDecimal avgRating = recentNotes.stream()
-                .filter(n -> n.getAverageRating() != null && n.getAverageRating().compareTo(BigDecimal.ZERO) > 0)
-                .map(NoteResponse::getAverageRating)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        long ratedNotes = recentNotes.stream()
-                .filter(n -> n.getAverageRating() != null && n.getAverageRating().compareTo(BigDecimal.ZERO) > 0)
-                .count();
-
-        BigDecimal avgRatingFinal = ratedNotes > 0
-                ? avgRating.divide(BigDecimal.valueOf(ratedNotes), 2, java.math.RoundingMode.HALF_UP)
+        // Review-weighted average rating across ALL the seller's notes:
+        //   Σ(rating × reviewCount) / Σ(reviewCount). Zero when there are no reviews.
+        BigDecimal ratingWeight = nvl(noteRepository.sumRatingWeightBySellerId(sellerId));
+        long       reviewCount  = noteRepository.sumReviewCountBySellerId(sellerId);
+        BigDecimal avgRatingFinal = reviewCount > 0
+                ? ratingWeight.divide(BigDecimal.valueOf(reviewCount), 2, java.math.RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
 
         // Verification status
@@ -137,7 +135,7 @@ public class DashboardServiceImpl implements DashboardService {
                 .totalEarnings(totalEarnings)
                 .monthEarnings(monthEarnings)
                 .todayEarnings(todayEarnings)
-                .totalNotes(noteRepository.countBySellerId(sellerId))
+                .totalNotes(noteRepository.countLiveBySellerId(sellerId))
                 .totalSales(totalSales)
                 .averageRating(avgRatingFinal)
                 .salesChart(salesChart)
@@ -170,12 +168,20 @@ public class DashboardServiceImpl implements DashboardService {
     private List<Map<String, Object>> buildDailyChartForSeller(Long sellerId,
                                                                 LocalDateTime start,
                                                                 LocalDateTime end) {
-        // Re-use platform query and filter by seller share from earnings
-        // Simplified: return daily revenue scoped by seller purchases
-        List<Object[]> rows = purchaseRepository.getDailyRevenue(start, end);
-        return rows.stream()
-                .map(r -> Map.<String, Object>of("date", r[0].toString(), "revenue", r[1]))
-                .toList();
+        // Seller's own daily earnings (their share), zero-filled across the whole
+        // window so the chart line is continuous instead of collapsing to the few
+        // days that happened to have a sale.
+        Map<String, BigDecimal> byDate = new HashMap<>();
+        for (Object[] r : purchaseRepository.getDailyRevenueBySeller(sellerId, start, end)) {
+            BigDecimal rev = r[1] != null ? new BigDecimal(r[1].toString()) : BigDecimal.ZERO;
+            byDate.put(r[0].toString(), rev);
+        }
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (LocalDate d = start.toLocalDate(); !d.isAfter(end.toLocalDate()); d = d.plusDays(1)) {
+            String key = d.toString();
+            out.add(Map.of("date", key, "revenue", byDate.getOrDefault(key, BigDecimal.ZERO)));
+        }
+        return out;
     }
 
     // ── Null-safe BigDecimal ──────────────────────────────────

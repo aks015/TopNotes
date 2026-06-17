@@ -34,8 +34,16 @@ public class TestQuestion {
     private String questionText;
 
     /**
-     * Optional subject tag — e.g. "Mathematics", "Physics".
-     * Not used for filtering yet but ready for future use.
+     * The exam-category pool this question belongs to. NULL = "General" — a
+     * shared pool appended to every category's test (general aptitude). A
+     * category's test draws from its own questions + the shared General pool.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id")
+    private ExamCategory category;
+
+    /**
+     * Optional subject tag within the category — e.g. "Anatomy", "Polity".
      */
     @Column(length = 100)
     private String subject;

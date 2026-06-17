@@ -1,6 +1,7 @@
 package com.topnotes.service.impl;
 
 import com.topnotes.dto.response.PayoutResponse;
+import com.topnotes.dto.response.PayoutStatsResponse;
 import com.topnotes.dto.response.SellerEarningsResponse;
 import com.topnotes.entity.PayoutRequest;
 import com.topnotes.entity.User;
@@ -13,6 +14,7 @@ import com.topnotes.repository.PayoutRepository;
 import com.topnotes.repository.UserRepository;
 import com.topnotes.service.NotificationService;
 import com.topnotes.service.PayoutService;
+import com.topnotes.service.PlatformConfigService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -33,20 +35,29 @@ public class PayoutServiceImpl implements PayoutService {
     private final UserRepository userRepository;
     private final CashfreePayoutService cashfreePayoutService;
     private final NotificationService notificationService;
+    private final PlatformConfigService platformConfigService;
 
+    /** Default floor, seeded from properties; the live value is read from platform_config. */
     @Value("${app.business.min-withdraw:100}")
-    private BigDecimal minWithdraw;
+    private BigDecimal minWithdrawDefault;
 
     public PayoutServiceImpl(EarningRepository earningRepository,
                              PayoutRepository payoutRepository,
                              UserRepository userRepository,
                              CashfreePayoutService cashfreePayoutService,
-                             NotificationService notificationService) {
+                             NotificationService notificationService,
+                             PlatformConfigService platformConfigService) {
         this.earningRepository = earningRepository;
         this.payoutRepository = payoutRepository;
         this.userRepository = userRepository;
         this.cashfreePayoutService = cashfreePayoutService;
         this.notificationService = notificationService;
+        this.platformConfigService = platformConfigService;
+    }
+
+    /** Live minimum-withdrawal floor (admin-adjustable via platform_config). */
+    private BigDecimal minWithdraw() {
+        return platformConfigService.getDecimal("min-withdraw", minWithdrawDefault);
     }
 
     @Override
@@ -64,7 +75,7 @@ public class PayoutServiceImpl implements PayoutService {
                 .paidOut(paidOut)
                 .inProgress(inProgress)
                 .available(available)
-                .minWithdraw(minWithdraw)
+                .minWithdraw(minWithdraw())
                 .upiSet(seller.getUpiId() != null && !seller.getUpiId().isBlank())
                 .build();
     }
@@ -87,6 +98,7 @@ public class PayoutServiceImpl implements PayoutService {
                 sellerId, List.of(PayoutStatus.PENDING, PayoutStatus.PAID));
         BigDecimal available = earned.subtract(committed);
 
+        BigDecimal minWithdraw = minWithdraw();
         if (available.compareTo(minWithdraw) < 0) {
             throw new BadRequestException("Minimum withdrawal is ₹" + minWithdraw.stripTrailingZeros().toPlainString());
         }
@@ -112,6 +124,26 @@ public class PayoutServiceImpl implements PayoutService {
     public Page<PayoutResponse> getSellerPayouts(Long sellerId, Pageable pageable) {
         return payoutRepository.findBySellerIdOrderByRequestedAtDesc(sellerId, pageable)
                 .map(this::toResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PayoutStatsResponse getStats() {
+        return PayoutStatsResponse.builder()
+                .pendingCount(payoutRepository.countByStatus(PayoutStatus.PENDING))
+                .pendingAmount(payoutRepository.sumByStatus(PayoutStatus.PENDING))
+                .paidCount(payoutRepository.countByStatus(PayoutStatus.PAID))
+                .paidAmount(payoutRepository.sumByStatus(PayoutStatus.PAID))
+                .failedCount(payoutRepository.countByStatus(PayoutStatus.FAILED))
+                .failedAmount(payoutRepository.sumByStatus(PayoutStatus.FAILED))
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<PayoutResponse> getPayouts(PayoutStatus status, String keyword, Pageable pageable) {
+        String kw = (keyword == null || keyword.isBlank()) ? null : keyword.trim();
+        return payoutRepository.search(status, kw, pageable).map(this::toResponse);
     }
 
     @Override

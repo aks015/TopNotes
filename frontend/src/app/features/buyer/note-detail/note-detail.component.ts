@@ -1,300 +1,1000 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DatePipe } from '@angular/common';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ApiService } from '@core/services/api.service';
 import { AuthService } from '@core/services/auth.service';
 import { ToastService } from '@core/services/toast.service';
 import { load } from '@cashfreepayments/cashfree-js';
-import { Note, PaymentOrder, Review } from '@core/models';
-import { examLabel, initials, subjectGradient } from '@shared/util/note-display';
+import { Note, PaymentOrder, Review, ReviewStats } from '@core/models';
+import { TopNavComponent } from '@layout/top-nav/top-nav.component';
+import { examLabel, initials, rupee, subjectLinedPaper, subjectPaper } from '@shared/util/note-display';
 
 @Component({
   selector: 'app-note-detail',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, DatePipe],
+  imports: [RouterLink, DatePipe, TopNavComponent],
   template: `
-    <a class="btn btn-ghost btn-sm" routerLink="/browse" style="margin-bottom:16px;">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-        <path
-          d="M10 3 5 8l5 5"
-          stroke="currentColor"
-          stroke-width="1.7"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-      </svg>
-      Back to browse
-    </a>
+    <app-top-nav />
+    <div class="nd">
+      <a class="nd-back" routerLink="/browse">← Back to browse</a>
 
-    @if (loading()) {
-      <div class="detail-grid">
-        <div><div class="skel" style="aspect-ratio:1/1.3;max-width:420px;border-radius:12px"></div></div>
-        <div class="skel" style="height:280px;border-radius:12px"></div>
-      </div>
-    } @else {
-      @if (note(); as n) {
-        <div class="detail-grid">
-          <div>
-            <div class="preview-box">
-              <div class="thumb" style="position:absolute;inset:0;height:100%" [style.background]="thumbBg()">
-                <span class="thumb-glyph">{{ glyph() }}</span>
-              </div>
-              <div class="preview-lock">
-                <span class="lock-pill">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                    <rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" stroke-width="1.7" />
-                    <path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="1.7" />
-                  </svg>
-                  Preview only · full notes after purchase
-                </span>
-              </div>
-            </div>
-
-            <div class="detail-badges">
-              @if (n.subject) {
-                <span class="badge badge-indigo">{{ n.subject }}</span>
-              }
-              @if (n.examType) {
-                <span class="badge badge-amber">{{ examLabel() }}</span>
-              }
-              @if (n.classLevel) {
-                <span class="badge">{{ n.classLevel }}</span>
-              }
-            </div>
-            <h1 class="detail-title">{{ n.title }}</h1>
-            <div class="nc-meta" style="margin-top:12px;">
-              <span class="stars" style="--st:18px">
-                @for (f of starArr(); track $index) {
-                  <svg [class.empty]="!f" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="m12 2 2.9 6.1 6.6.8-4.9 4.6 1.3 6.5L12 17.6 6.1 20.6l1.3-6.5L2.5 8.9l6.6-.8L12 2Z" />
-                  </svg>
-                }
-              </span>
-              <span class="rating-text">{{ (n.averageRating || 0).toFixed(1) }}</span>
-              <span class="rating-count">({{ n.reviewCount || 0 }} reviews)</span>
-            </div>
-            <p class="detail-desc">{{ n.description }}</p>
-
-            <div class="detail-facts">
-              <div class="fact">
-                <div class="f-label">Pages</div>
-                <div class="f-value">{{ n.totalPages || '—' }}</div>
-              </div>
-              <div class="fact">
-                <div class="f-label">Format</div>
-                <div class="f-value">PDF</div>
-              </div>
-              <div class="fact">
-                <div class="f-label">Exam</div>
-                <div class="f-value">{{ examLabel() || '—' }}</div>
-              </div>
-              <div class="fact">
-                <div class="f-label">Class</div>
-                <div class="f-value">{{ (n.classLevel || '').replace('Class ', '') || '—' }}</div>
-              </div>
-            </div>
-
-            @if (n.seller; as s) {
-              <div class="card seller-mini">
-                <span class="avatar avatar-lg">{{ sellerInitials() }}</span>
-                <div class="sm-body">
-                  <h4>
-                    {{ s.fullName }}
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                      <path
-                        d="M12 2.5 4 6v5c0 5 3.5 8 8 9.5 4.5-1.5 8-4.5 8-9.5V6l-8-3.5Z"
-                        fill="#EEEBFB"
-                        stroke="#5B4BE0"
-                        stroke-width="1.4"
-                        stroke-linejoin="round"
-                      />
-                      <path
-                        d="m9 12 2 2 4-4.5"
-                        stroke="#5B4BE0"
-                        stroke-width="1.6"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      />
-                    </svg>
-                  </h4>
-                  @if (s.institution) {
-                    <div class="sm-inst">{{ s.institution }}</div>
-                  }
-                  @if (s.bio) {
-                    <p class="sm-bio">{{ s.bio }}</p>
-                  }
-                </div>
-              </div>
-            }
-          </div>
-
-          <!-- purchase card -->
-          <div class="card purchase-card">
-            <div class="pc-price">₹{{ (n.price || 0).toLocaleString('en-IN') }} <small>one-time</small></div>
-
-            @if (isPurchased()) {
-              <a
-                class="btn btn-primary btn-lg btn-block"
-                style="margin-top:16px;background:var(--success);"
-                [routerLink]="['/notes', n.id, 'view']"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="margin-right:4px;">
-                  <path
-                    d="M4 5.5C4 4.7 4.7 4 5.5 4H11v15H5.5A1.5 1.5 0 0 1 4 17.5v-12Z"
-                    stroke="white"
-                    stroke-width="1.6"
-                  />
-                  <path
-                    d="M20 5.5C20 4.7 19.3 4 18.5 4H13v15h5.5a1.5 1.5 0 0 0 1.5-1.5v-12Z"
-                    stroke="white"
-                    stroke-width="1.6"
-                  />
-                </svg>
-                Read notes
-              </a>
-            } @else {
-              <button
-                class="btn btn-primary btn-lg btn-block"
-                style="margin-top:16px;"
-                [attr.data-loading]="purchasing() ? '1' : null"
-                (click)="buy()"
-              >
-                <span class="btn-spin"></span>
-                <span>Buy for ₹{{ (n.price || 0).toLocaleString('en-IN') }}</span>
-              </button>
-            }
-
-            <div class="pc-secure">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" stroke-width="1.6" />
-                <path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="1.6" />
-              </svg>
-              View-only access · watermarked with your email · no download
-            </div>
-            <ul class="pc-includes">
-              <li>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="m5 13 4 4L19 7"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                </svg>
-                {{ n.totalPages || '' }} pages of handwritten notes
-              </li>
-              <li>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="m5 13 4 4L19 7"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                </svg>
-                Lifetime access in your library
-              </li>
-              <li>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="m5 13 4 4L19 7"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                </svg>
-                Read on any device, secure viewer
-              </li>
-            </ul>
-          </div>
-        </div>
-
-        <!-- reviews -->
-        <div class="reviews">
-          <h2 style="font-size:var(--t-24);font-weight:800;">Reviews</h2>
-          <div class="card rev-summary" style="margin-top:14px;">
-            <div style="text-align:center;">
-              <div class="rev-big">{{ (n.averageRating || 0).toFixed(1) }}</div>
-              <div class="stars" style="--st:16px">
-                @for (f of starArr(); track $index) {
-                  <svg [class.empty]="!f" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="m12 2 2.9 6.1 6.6.8-4.9 4.6 1.3 6.5L12 17.6 6.1 20.6l1.3-6.5L2.5 8.9l6.6-.8L12 2Z" />
-                  </svg>
-                }
-              </div>
-              <div class="rating-count" style="margin-top:6px;">{{ n.reviewCount || 0 }} reviews</div>
-            </div>
-          </div>
-
-          @if (canReview()) {
-            <div class="card write-review">
-              <h4 style="font-size:var(--t-16);margin-bottom:6px;">Write a review</h4>
-              <p class="muted" style="font-size:var(--t-14);margin:0 0 14px;">
-                You purchased this note — share your experience.
-              </p>
-              <div class="stars" style="--st:26px;margin-bottom:12px;cursor:pointer;">
-                @for (i of [1, 2, 3, 4, 5]; track i) {
-                  <svg [class.empty]="i > myRating()" (click)="myRating.set(i)" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="m12 2 2.9 6.1 6.6.8-4.9 4.6 1.3 6.5L12 17.6 6.1 20.6l1.3-6.5L2.5 8.9l6.6-.8L12 2Z" />
-                  </svg>
-                }
-              </div>
-              <textarea
-                class="textarea"
-                placeholder="What did you think of these notes?"
-                [value]="myComment()"
-                (input)="myComment.set($any($event.target).value)"
-              ></textarea>
-              <div style="margin-top:14px;">
-                <button
-                  class="btn btn-primary"
-                  [attr.data-loading]="submitting() ? '1' : null"
-                  (click)="submitReview()"
-                >
-                  <span class="btn-spin"></span><span>Submit review</span>
-                </button>
-              </div>
-            </div>
-          }
-
-          <div class="rev-list">
-            @for (r of reviews(); track r.id) {
-              <div class="rev-item card">
-                <div class="rev-top">
-                  <span class="avatar avatar-sm">{{ initials(r.buyerName) }}</span>
-                  <span class="rev-name">{{ r.buyerName || 'Student' }}</span>
-                  <time>{{ r.createdAt | date: 'd MMM y' }}</time>
-                </div>
-                <div class="stars" style="--st:15px;margin-top:8px;">
-                  @for (i of [1, 2, 3, 4, 5]; track i) {
-                    <svg [class.empty]="i > r.rating" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="m12 2 2.9 6.1 6.6.8-4.9 4.6 1.3 6.5L12 17.6 6.1 20.6l1.3-6.5L2.5 8.9l6.6-.8L12 2Z" />
-                    </svg>
-                  }
-                </div>
-                <p class="rev-text">{{ r.comment }}</p>
-              </div>
-            } @empty {
-              <p class="muted" style="font-size:var(--t-14);">
-                No reviews yet — be the first to review after purchase.
-              </p>
-            }
-          </div>
+      @if (loading()) {
+        <div class="nd-grid">
+          <div class="nd-skel" style="aspect-ratio: 1 / 0.92"></div>
+          <div class="nd-skel" style="height: 320px"></div>
         </div>
       } @else {
-        <div class="card empty">
-          <h3>Note not found</h3>
-          <p>This note may have been removed.</p>
-          <a class="btn btn-primary" routerLink="/browse">Back to browse</a>
-        </div>
+        @if (note(); as n) {
+          <div class="nd-grid">
+            <!-- LEFT -->
+            <div class="nd-main">
+              <!-- Preview: real first-pages PDF when available, else a mock -->
+              <div class="nd-preview">
+                @if (previewSrc(); as src) {
+                  <iframe class="nd-pdf" [src]="src" title="Note preview"></iframe>
+                  <div class="nd-free">
+                    Showing the first few pages of {{ n.totalPages || '—' }} · the rest unlocks on purchase
+                  </div>
+                } @else {
+                  <div class="nd-paper" [style.--accent]="paper().accent">
+                    <div class="nd-paper-body">
+                      <i style="width: 58%"></i>
+                      <i style="width: 90%"></i>
+                      <i style="width: 82%"></i>
+                      <i style="width: 70%"></i>
+                      <span class="nd-paper-dia">Read-it box</span>
+                      <i style="width: 64%"></i>
+                      <i style="width: 44%"></i>
+                    </div>
+                    <span class="nd-paper-cap">🔖 {{ n.subject || 'Topic' }} — labeled notes</span>
+                  </div>
+                  <div class="nd-strip">
+                    <span class="nd-thumb active">1</span>
+                    <span class="nd-thumb locked">🔒</span>
+                    <span class="nd-thumb locked">🔒</span>
+                    <span class="nd-thumb locked">🔒</span>
+                  </div>
+                  <div class="nd-free">
+                    1 of {{ n.totalPages || '—' }} pages free to preview · the rest unlocks on purchase
+                  </div>
+                }
+              </div>
+
+              <!-- Tags / title / rating / desc -->
+              <div class="nd-tags">
+                @if (n.subject) {
+                  <span class="nd-tag" [style.background]="paper().chip" [style.color]="paper().accent">{{ n.subject }}</span>
+                }
+                @if (n.exam || n.examType) {
+                  <span class="nd-tag muted">{{ examLabel() }}</span>
+                }
+                @if (n.category) {
+                  <span class="nd-tag muted">{{ n.category }}</span>
+                }
+                @if (n.level || n.classLevel) {
+                  <span class="nd-tag muted">{{ n.level || n.classLevel }}</span>
+                }
+              </div>
+
+              <h1 class="nd-title">{{ n.title }}</h1>
+
+              <div class="nd-rating">
+                @if (reviewTotal()) {
+                  <span class="nd-stars">
+                    @for (f of starArr(); track $index) {
+                      <span [class.on]="f">★</span>
+                    }
+                  </span>
+                  <b>{{ reviewAvg().toFixed(1) }}</b>
+                  <span class="nd-rating-count">({{ reviewTotal() }} reviews)</span>
+                } @else {
+                  <span class="nd-new">New</span>
+                }
+                @if (n.purchaseCount) {
+                  <span class="nd-dot">·</span><span class="nd-rating-count">{{ n.purchaseCount }} students enrolled</span>
+                }
+              </div>
+
+              <p class="nd-desc">{{ n.description }}</p>
+
+              <div class="nd-facts">
+                <div class="nd-fact"><span>Pages</span><b>{{ n.totalPages || '—' }}</b></div>
+                <div class="nd-fact"><span>Format</span><b>PDF</b></div>
+                <div class="nd-fact"><span>Exam</span><b>{{ examLabel() || '—' }}</b></div>
+                <div class="nd-fact"><span>Level</span><b>{{ n.level || n.classLevel || '—' }}</b></div>
+              </div>
+
+              <!-- Seller -->
+              @if (n.seller; as s) {
+                <div class="nd-seller">
+                  <div class="nd-seller-eyebrow">notes by a verified topper</div>
+                  <a class="nd-seller-top" [routerLink]="['/u', s.id]" [attr.aria-label]="'View ' + s.fullName + '\\'s profile'">
+                    <span class="nd-seller-av" [style.background]="paper().accent">{{ sellerInitials() }}</span>
+                    <div>
+                      <div class="nd-seller-name">
+                        {{ s.fullName }}
+                        @if (s.verified) {
+                          <span class="nd-seller-badge">✓ Verified</span>
+                        }
+                      </div>
+                      <div class="nd-seller-sub">
+                        {{ s.institution }}@if (s.bio) { · {{ s.bio }} }
+                      </div>
+                    </div>
+                    <span class="nd-seller-go">→</span>
+                  </a>
+                  <div class="nd-seller-stats">
+                    @if (s.institution) {
+                      <div class="nd-stat"><b>{{ s.institution }}</b><span>Institution</span></div>
+                    }
+                    @if (s.classLevel) {
+                      <div class="nd-stat"><b>{{ s.classLevel }}</b><span>Teaches</span></div>
+                    }
+                    <div class="nd-stat"><b>{{ s.totalNotes ?? 0 }} sets</b><span>on TopNotes</span></div>
+                  </div>
+                  <a class="nd-seller-view" [routerLink]="['/u', s.id]">View full profile →</a>
+                </div>
+              }
+            </div>
+
+            <!-- RIGHT: purchase card -->
+            <aside class="nd-aside">
+              <div class="nd-buy">
+                <div class="nd-price">{{ rupee(n.price) }} <small>one-time</small></div>
+                <div class="nd-price-sub">Secure checkout · instant access</div>
+
+                @if (isOwnNote()) {
+                  <div class="nd-own">✓ This is your note — it's listed in the marketplace.</div>
+                  <a class="nd-cta manage" routerLink="/seller/notes">Manage in My Notes</a>
+                } @else if (isPurchased()) {
+                  <a class="nd-cta read" [routerLink]="['/notes', n.id, 'view']">Read notes →</a>
+                } @else {
+                  <button class="nd-cta buy" [disabled]="purchasing()" (click)="buy()">
+                    {{ purchasing() ? 'Opening checkout…' : 'Buy for ' + rupee(n.price) }}
+                  </button>
+                }
+
+                <div class="nd-secure">🔒 View-only access · watermarked with your email · no download</div>
+                <ul class="nd-includes">
+                  @if (n.totalPages) {
+                    <li>✓ {{ n.totalPages }} pages of handwritten notes</li>
+                  }
+                  <li>✓ Lifetime access in your library</li>
+                  <li>✓ Read on any device, secure viewer</li>
+                </ul>
+              </div>
+
+              @if (reviewTotal()) {
+                <div class="nd-ratecard">
+                  <span class="nd-stars sm">
+                    @for (f of starArr(); track $index) {
+                      <span [class.on]="f">★</span>
+                    }
+                  </span>
+                  <span><b>{{ reviewTotal() }}</b> buyers rated this <b>{{ reviewAvg().toFixed(1) }}</b></span>
+                </div>
+              }
+            </aside>
+          </div>
+
+          <!-- REVIEWS -->
+          <section class="nd-reviews">
+            <h2 class="nd-rev-h">Reviews</h2>
+            <div class="nd-rev-wrap">
+              <div class="nd-rev-summary">
+                @if (reviewTotal()) {
+                  <div class="nd-rev-big">{{ reviewAvg().toFixed(1) }}</div>
+                  <span class="nd-stars lg">
+                    @for (f of starArr(); track $index) {
+                      <span [class.on]="f">★</span>
+                    }
+                  </span>
+                  <div class="nd-rating-count">Based on {{ reviewTotal() }} reviews</div>
+                  <div class="nd-dist">
+                    @for (row of ratingRows(); track row.star) {
+                      <div class="nd-dist-row">
+                        <span class="nd-dist-star">{{ row.star }}</span>
+                        <span class="nd-dist-bar"><i [style.width.%]="row.pct"></i></span>
+                        <span class="nd-dist-count">{{ row.count }}</span>
+                      </div>
+                    }
+                  </div>
+                } @else {
+                  <div class="nd-rev-none">No ratings yet</div>
+                  <p class="nd-rating-count" style="margin: 6px 0 0">Be the first to review this note after purchase.</p>
+                }
+              </div>
+
+              <div class="nd-rev-right">
+                @if (canReview()) {
+                  <div class="nd-write" id="nd-write">
+                    <h4>{{ myReview() ? 'Edit your review' : 'Write a review' }}</h4>
+                    <div class="nd-rate">
+                      @for (i of [1, 2, 3, 4, 5]; track i) {
+                        <span [class.on]="i <= myRating()" (click)="myRating.set(i)">★</span>
+                      }
+                    </div>
+                    <textarea
+                      class="nd-textarea"
+                      placeholder="What did you think of these notes?"
+                      [value]="myComment()"
+                      (input)="myComment.set($any($event.target).value)"
+                    ></textarea>
+                    <button class="nd-cta buy" style="margin-top: 12px" [disabled]="submitting()" (click)="submitReview()">
+                      {{ submitting() ? 'Saving…' : myReview() ? 'Update review' : 'Submit review' }}
+                    </button>
+                  </div>
+                } @else if (isOwnNote()) {
+                  <div class="nd-write-hint">✍️ Reviews from your buyers will appear here.</div>
+                } @else {
+                  <div class="nd-write-hint">
+                    🔒 Only buyers can review. Purchase this note to share your experience.
+                  </div>
+                }
+
+                <div class="nd-rev-list">
+                  @for (r of reviews(); track r.id) {
+                    <div class="nd-rev-item">
+                      <div class="nd-rev-top">
+                        <span class="nd-rev-av">{{ initials(r.buyerName) }}</span>
+                        <div>
+                          <div class="nd-rev-name">
+                            {{ r.buyerName || 'Student' }}
+                            @if (r.id === myReview()?.id) {
+                              <span class="nd-rev-you">You</span>
+                            }
+                          </div>
+                          <div class="nd-rev-vrf">✓ Verified purchase</div>
+                        </div>
+                        @if (r.id === myReview()?.id) {
+                          <button class="nd-rev-edit" (click)="editReview()">Edit</button>
+                        } @else {
+                          <time>{{ r.createdAt | date: 'd MMM y' }}</time>
+                        }
+                      </div>
+                      <span class="nd-stars sm">
+                        @for (i of [1, 2, 3, 4, 5]; track i) {
+                          <span [class.on]="i <= r.rating">★</span>
+                        }
+                      </span>
+                      <p class="nd-rev-text">{{ r.comment }}</p>
+                    </div>
+                  } @empty {
+                    <p class="nd-rev-empty">No reviews yet — be the first to review after purchase.</p>
+                  }
+                </div>
+              </div>
+            </div>
+          </section>
+        } @else {
+          <div class="nd-empty">
+            <h3>Note not found</h3>
+            <p>This note may have been removed.</p>
+            <a class="nd-cta buy" routerLink="/browse">Back to browse</a>
+          </div>
+        }
       }
-    }
+    </div>
   `,
+  styles: [
+    `
+      :host {
+        display: block;
+        background: #fbfaf6;
+        min-height: 100vh;
+        font-family: 'Instrument Sans', system-ui, sans-serif;
+        color: #16141e;
+      }
+      .nd {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 28px 28px 96px;
+      }
+      .nd-back {
+        display: inline-block;
+        text-decoration: none;
+        color: #4b4860;
+        font-size: 14px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border: 1px solid #e2decf;
+        border-radius: 99px;
+        background: #fff;
+        margin-bottom: 22px;
+      }
+      .nd-back:hover {
+        color: #5840e0;
+        border-color: #5840e0;
+      }
+      .nd-grid {
+        display: grid;
+        grid-template-columns: 1fr 350px;
+        gap: 36px;
+        align-items: start;
+      }
+
+      /* ---- Preview mock ---- */
+      .nd-preview {
+        margin-bottom: 26px;
+      }
+      .nd-pdf {
+        width: 100%;
+        height: 520px;
+        border: 1px solid #e9e5d8;
+        border-radius: 16px;
+        background: #fff;
+        display: block;
+      }
+      .nd-paper {
+        position: relative;
+        background: #fff;
+        border: 1px solid #e9e5d8;
+        border-radius: 16px;
+        padding: 26px 26px 26px 46px;
+        overflow: hidden;
+        min-height: 300px;
+      }
+      .nd-paper::before {
+        content: '';
+        position: absolute;
+        left: 30px;
+        top: 0;
+        bottom: 0;
+        width: 1.5px;
+        background: #f0b8b8;
+      }
+      .nd-paper-body {
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+        position: relative;
+        background-image: repeating-linear-gradient(#fff, #fff 33px, #eef1f8 34px);
+      }
+      .nd-paper-body i {
+        display: block;
+        height: 11px;
+        border-radius: 4px;
+        background: #dde2ee;
+      }
+      .nd-paper-dia {
+        position: absolute;
+        right: 0;
+        top: 70px;
+        width: 38%;
+        height: 92px;
+        border: 1.5px dashed #c7cede;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        font-size: 11px;
+        color: #a8aec2;
+        background: #fafbff;
+      }
+      .nd-paper-cap {
+        position: absolute;
+        left: 26px;
+        bottom: 18px;
+        background: #16141e;
+        color: #fff;
+        font-size: 12.5px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: 99px;
+      }
+      .nd-strip {
+        display: flex;
+        gap: 10px;
+        margin-top: 14px;
+      }
+      .nd-thumb {
+        width: 46px;
+        height: 58px;
+        border-radius: 8px;
+        display: grid;
+        place-items: center;
+        font-size: 12px;
+        font-weight: 700;
+        flex: none;
+      }
+      .nd-thumb.active {
+        border: 2px solid #5840e0;
+        color: #5840e0;
+        background: #fff;
+      }
+      .nd-thumb.locked {
+        background: #eceae3;
+        color: #b3afa2;
+      }
+      .nd-free {
+        margin-top: 12px;
+        font-size: 12.5px;
+        color: #8b879a;
+      }
+
+      /* ---- Tags / title ---- */
+      .nd-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      .nd-tag {
+        font-size: 12px;
+        font-weight: 700;
+        padding: 5px 12px;
+        border-radius: 99px;
+      }
+      .nd-tag.muted {
+        background: #f0ede2;
+        color: #5b5870;
+      }
+      .nd-title {
+        margin: 0;
+        font-family: 'Bricolage Grotesque', system-ui, sans-serif;
+        font-weight: 800;
+        font-size: 32px;
+        line-height: 1.14;
+        letter-spacing: -0.03em;
+      }
+      .nd-rating {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin-top: 12px;
+        font-size: 14.5px;
+      }
+      .nd-rating-count {
+        color: #8b879a;
+      }
+      .nd-new {
+        font-size: 12.5px;
+        font-weight: 700;
+        color: #5840e0;
+        background: #efebff;
+        padding: 3px 11px;
+        border-radius: 99px;
+      }
+      .nd-rev-none {
+        font-family: 'Bricolage Grotesque', system-ui, sans-serif;
+        font-weight: 800;
+        font-size: 22px;
+        color: #16141e;
+      }
+      .nd-dot {
+        color: #c8c2ad;
+      }
+      .nd-stars span {
+        color: #d8d3c4;
+        font-size: 16px;
+      }
+      .nd-stars span.on {
+        color: #e8a317;
+      }
+      .nd-stars.lg span {
+        font-size: 20px;
+      }
+      .nd-stars.sm span {
+        font-size: 13px;
+      }
+      .nd-desc {
+        margin: 16px 0 0;
+        font-size: 15.5px;
+        line-height: 1.7;
+        color: #5b5870;
+      }
+
+      /* ---- Facts ---- */
+      .nd-facts {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        margin: 24px 0;
+      }
+      .nd-fact {
+        border: 1px solid #e9e5d8;
+        border-radius: 12px;
+        padding: 14px 16px;
+        background: #fff;
+      }
+      .nd-fact span {
+        display: block;
+        font-size: 11.5px;
+        font-weight: 600;
+        color: #8b879a;
+        margin-bottom: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .nd-fact b {
+        font-family: 'Bricolage Grotesque', system-ui, sans-serif;
+        font-size: 18px;
+        font-weight: 700;
+      }
+
+      /* ---- Seller ---- */
+      .nd-seller {
+        background: #fff;
+        border: 1px solid #e9e5d8;
+        border-radius: 16px;
+        padding: 18px 20px;
+      }
+      .nd-seller-eyebrow {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: #8b879a;
+        margin-bottom: 12px;
+      }
+      .nd-seller-top {
+        display: flex;
+        gap: 14px;
+        align-items: center;
+        text-decoration: none;
+        color: inherit;
+        border-radius: 12px;
+        margin: -6px;
+        padding: 6px;
+        transition: background 0.12s;
+      }
+      .nd-seller-top:hover {
+        background: #faf8f2;
+      }
+      .nd-seller-go {
+        margin-left: auto;
+        color: #8a8475;
+        font-size: 18px;
+        transition: transform 0.15s, color 0.15s;
+      }
+      .nd-seller-top:hover .nd-seller-go {
+        color: #5840e0;
+        transform: translateX(2px);
+      }
+      .nd-seller-view {
+        display: inline-block;
+        margin-top: 14px;
+        font-size: 13.5px;
+        font-weight: 700;
+        color: #5840e0;
+        text-decoration: none;
+      }
+      .nd-seller-view:hover {
+        text-decoration: underline;
+      }
+      .nd-seller-av {
+        width: 46px;
+        height: 46px;
+        border-radius: 99px;
+        color: #fff;
+        display: grid;
+        place-items: center;
+        font-weight: 700;
+        font-size: 15px;
+        flex: none;
+      }
+      .nd-seller-name {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 700;
+        font-size: 15.5px;
+      }
+      .nd-seller-badge {
+        font-size: 11px;
+        font-weight: 700;
+        color: #5840e0;
+        background: #efebff;
+        padding: 3px 9px;
+        border-radius: 99px;
+      }
+      .nd-seller-sub {
+        font-size: 13px;
+        color: #5b5870;
+        margin-top: 3px;
+      }
+      .nd-seller-stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        margin-top: 16px;
+      }
+      .nd-stat {
+        background: #fbfaf6;
+        border: 1px solid #ece8dd;
+        border-radius: 12px;
+        padding: 12px;
+      }
+      .nd-stat b {
+        display: block;
+        font-family: 'Bricolage Grotesque', system-ui, sans-serif;
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1.2;
+      }
+      .nd-stat span {
+        font-size: 11.5px;
+        color: #8b879a;
+      }
+
+      /* ---- Purchase card ---- */
+      .nd-aside {
+        position: sticky;
+        top: 96px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .nd-buy {
+        background: #fff;
+        border: 1px solid #e9e5d8;
+        border-radius: 20px;
+        padding: 24px;
+        box-shadow: 0 18px 40px -28px rgba(22, 20, 30, 0.4);
+      }
+      .nd-price {
+        font-family: 'Bricolage Grotesque', system-ui, sans-serif;
+        font-weight: 800;
+        font-size: 34px;
+        letter-spacing: -0.03em;
+      }
+      .nd-price small {
+        font-family: 'Instrument Sans', system-ui, sans-serif;
+        font-size: 14px;
+        font-weight: 500;
+        color: #8b879a;
+      }
+      .nd-price-sub {
+        font-size: 12.5px;
+        color: #8b879a;
+        margin-top: 2px;
+      }
+      .nd-cta {
+        display: block;
+        width: 100%;
+        text-align: center;
+        text-decoration: none;
+        font-size: 15.5px;
+        font-weight: 700;
+        padding: 14px;
+        border-radius: 14px;
+        border: none;
+        cursor: pointer;
+        margin-top: 16px;
+        font-family: inherit;
+      }
+      .nd-cta.buy {
+        background: #5840e0;
+        color: #fff;
+      }
+      .nd-cta.buy:hover:not(:disabled) {
+        background: #4733c4;
+      }
+      .nd-cta.buy:disabled {
+        opacity: 0.7;
+        cursor: default;
+      }
+      .nd-cta.read {
+        background: #0e8a4d;
+        color: #fff;
+      }
+      .nd-cta.read:hover {
+        background: #0c7541;
+      }
+      .nd-cta.manage {
+        background: #fff;
+        color: #16141e;
+        border: 1px solid #e2decf;
+      }
+      .nd-cta.manage:hover {
+        border-color: #5840e0;
+        color: #5840e0;
+      }
+      .nd-own {
+        margin-top: 16px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: #e9fbf0;
+        border: 1px solid #b6e9cc;
+        color: #0e8a4d;
+        font-size: 13.5px;
+        font-weight: 600;
+        line-height: 1.4;
+      }
+      .nd-secure {
+        margin-top: 14px;
+        padding: 12px 14px;
+        background: #fbfaf6;
+        border: 1px solid #ece8dd;
+        border-radius: 12px;
+        font-size: 12.5px;
+        color: #5b5870;
+        line-height: 1.5;
+      }
+      .nd-includes {
+        list-style: none;
+        margin: 16px 0 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .nd-includes li {
+        font-size: 14px;
+        color: #3e3b52;
+      }
+      .nd-ratecard {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: #fff;
+        border: 1px solid #e9e5d8;
+        border-radius: 14px;
+        padding: 14px 18px;
+        font-size: 13.5px;
+        color: #5b5870;
+      }
+
+      /* ---- Reviews ---- */
+      .nd-reviews {
+        margin-top: 44px;
+      }
+      .nd-rev-h {
+        font-family: 'Bricolage Grotesque', system-ui, sans-serif;
+        font-weight: 800;
+        font-size: 26px;
+        margin: 0 0 16px;
+      }
+      .nd-rev-wrap {
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        gap: 22px;
+        align-items: start;
+      }
+      .nd-rev-summary {
+        background: #fff;
+        border: 1px solid #e9e5d8;
+        border-radius: 16px;
+        padding: 24px;
+        position: sticky;
+        top: 96px;
+      }
+      .nd-rev-big {
+        font-family: 'Bricolage Grotesque', system-ui, sans-serif;
+        font-weight: 800;
+        font-size: 52px;
+        line-height: 1;
+      }
+      .nd-rev-summary .nd-stars {
+        display: block;
+        margin: 6px 0;
+      }
+      .nd-dist {
+        margin-top: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+      .nd-dist-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: #8b879a;
+      }
+      .nd-dist-star {
+        width: 10px;
+        text-align: right;
+      }
+      .nd-dist-bar {
+        flex: 1;
+        height: 6px;
+        border-radius: 99px;
+        background: #ece8dd;
+        overflow: hidden;
+      }
+      .nd-dist-bar i {
+        display: block;
+        height: 100%;
+        background: #e8a317;
+        border-radius: 99px;
+      }
+      .nd-dist-count {
+        width: 22px;
+        text-align: right;
+      }
+      .nd-write {
+        background: #fff;
+        border: 1px solid #e9e5d8;
+        border-radius: 16px;
+        padding: 22px;
+        margin-bottom: 12px;
+      }
+      .nd-write h4 {
+        margin: 0 0 10px;
+        font-size: 16px;
+        font-weight: 700;
+      }
+      .nd-write-hint {
+        background: #fff;
+        border: 1px dashed #e2decf;
+        border-radius: 14px;
+        padding: 16px 18px;
+        margin-bottom: 12px;
+        font-size: 14px;
+        font-weight: 600;
+        color: #5b5870;
+      }
+      .nd-rate span {
+        font-size: 28px;
+        color: #d8d3c4;
+        cursor: pointer;
+      }
+      .nd-rate span.on {
+        color: #e8a317;
+      }
+      .nd-textarea {
+        width: 100%;
+        margin-top: 12px;
+        min-height: 90px;
+        padding: 12px 14px;
+        border: 1px solid #e2decf;
+        border-radius: 12px;
+        font-family: inherit;
+        font-size: 14.5px;
+        resize: vertical;
+        background: #fbfaf6;
+        color: #16141e;
+      }
+      .nd-textarea:focus {
+        outline: none;
+        border-color: #5840e0;
+        background: #fff;
+      }
+      .nd-rev-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .nd-rev-item {
+        background: #fff;
+        border: 1px solid #e9e5d8;
+        border-radius: 16px;
+        padding: 18px 20px;
+      }
+      .nd-rev-top {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .nd-rev-av {
+        width: 36px;
+        height: 36px;
+        border-radius: 99px;
+        background: #5840e0;
+        color: #fff;
+        display: grid;
+        place-items: center;
+        font-size: 12px;
+        font-weight: 700;
+        flex: none;
+      }
+      .nd-rev-name {
+        font-weight: 700;
+        font-size: 14px;
+      }
+      .nd-rev-vrf {
+        font-size: 11.5px;
+        font-weight: 600;
+        color: #0e8a4d;
+      }
+      .nd-rev-you {
+        font-size: 10.5px;
+        font-weight: 700;
+        color: #5840e0;
+        background: #efebff;
+        padding: 2px 8px;
+        border-radius: 99px;
+        margin-left: 6px;
+      }
+      .nd-rev-top time {
+        margin-left: auto;
+        font-size: 12.5px;
+        color: #8b879a;
+      }
+      .nd-rev-edit {
+        margin-left: auto;
+        font-size: 13px;
+        font-weight: 700;
+        color: #5840e0;
+        background: none;
+        border: 1px solid #ddd5ff;
+        border-radius: 99px;
+        padding: 5px 14px;
+        cursor: pointer;
+      }
+      .nd-rev-edit:hover {
+        background: #efebff;
+      }
+      .nd-rev-item .nd-stars {
+        display: block;
+        margin: 10px 0 6px;
+      }
+      .nd-rev-text {
+        margin: 0;
+        font-size: 14.5px;
+        line-height: 1.6;
+        color: #3e3b52;
+      }
+      .nd-rev-empty {
+        font-size: 14px;
+        color: #8b879a;
+      }
+      .nd-empty {
+        text-align: center;
+        padding: 80px 20px;
+      }
+      .nd-empty h3 {
+        font-family: 'Bricolage Grotesque', system-ui, sans-serif;
+        font-size: 24px;
+        font-weight: 800;
+      }
+      .nd-empty .nd-cta {
+        display: inline-block;
+        width: auto;
+        padding: 12px 26px;
+        margin-top: 14px;
+      }
+      .nd-skel {
+        border-radius: 20px;
+        background: linear-gradient(100deg, #f1eee6 30%, #f7f5ef 50%, #f1eee6 70%);
+        background-size: 200% 100%;
+        animation: ndShimmer 1.3s infinite;
+      }
+      @keyframes ndShimmer {
+        from {
+          background-position: 200% 0;
+        }
+        to {
+          background-position: -200% 0;
+        }
+      }
+
+      @media (max-width: 860px) {
+        .nd-grid {
+          grid-template-columns: 1fr;
+          gap: 24px;
+        }
+        .nd-aside {
+          position: static;
+        }
+        .nd-rev-wrap {
+          grid-template-columns: 1fr;
+        }
+        .nd-rev-summary {
+          position: static;
+        }
+      }
+      @media (max-width: 560px) {
+        .nd {
+          padding: 20px 16px 88px;
+        }
+        .nd-title {
+          font-size: 26px;
+        }
+        .nd-facts {
+          grid-template-columns: repeat(2, 1fr);
+          gap: 12px;
+        }
+        .nd-seller-stats {
+          grid-template-columns: 1fr;
+        }
+      }
+    `,
+  ],
 })
 export class NoteDetailComponent {
   private route = inject(ActivatedRoute);
@@ -302,10 +1002,17 @@ export class NoteDetailComponent {
   private api = inject(ApiService);
   private auth = inject(AuthService);
   private toast = inject(ToastService);
+  private sanitizer = inject(DomSanitizer);
   private destroyRef = inject(DestroyRef);
+
+  /** Blob URL of the first-pages preview PDF; null → fall back to the mock. */
+  protected previewSrc = signal<SafeResourceUrl | null>(null);
+  private previewObjectUrl: string | null = null;
 
   protected note = signal<Note | null>(null);
   protected reviews = signal<Review[]>([]);
+  protected stats = signal<ReviewStats | null>(null);
+  protected myReview = signal<Review | null>(null);
   protected loading = signal(true);
   protected purchasing = signal(false);
   protected submitting = signal(false);
@@ -316,16 +1023,39 @@ export class NoteDetailComponent {
   private id = Number(this.route.snapshot.paramMap.get('id'));
 
   protected isPurchased = computed(() => this.purchasedLocal() || !!this.note()?.isPurchased);
-  protected canReview = computed(() => this.isPurchased());
+  protected canReview = computed(() => this.isPurchased() && !this.isOwnNote());
 
-  protected examLabel = computed(() => examLabel(this.note()?.examType));
-  protected thumbBg = computed(() => subjectGradient(this.note()?.subject));
+  /** The logged-in user is the seller of this note → can't buy/review their own listing. */
+  protected isOwnNote = computed(() => {
+    const sid = this.note()?.seller?.id;
+    return sid != null && sid === this.auth.user()?.userId;
+  });
+
+  protected examLabel = computed(() => this.note()?.exam || examLabel(this.note()?.examType));
+  protected paper = computed(() => subjectPaper(this.note()?.subject));
+  protected cover = computed(() => subjectLinedPaper(this.note()?.subject));
   protected glyph = computed(() => (this.note()?.subject ?? '?').charAt(0).toUpperCase());
   protected sellerInitials = computed(() => this.initials(this.note()?.seller?.fullName));
+  // Review summary driven by the backend aggregate (real rows), with the note's
+  // denormalised values as a pre-load fallback.
+  protected reviewAvg = computed(() => this.stats()?.average ?? this.note()?.averageRating ?? 0);
+  protected reviewTotal = computed(() => this.stats()?.total ?? this.note()?.reviewCount ?? 0);
   protected starArr = computed(() => {
-    const r = Math.round(this.note()?.averageRating ?? 0);
+    const r = Math.round(this.reviewAvg());
     return Array.from({ length: 5 }, (_, i) => i < r);
   });
+  /** Per-star rows for the distribution bars (from the real aggregate). */
+  protected ratingRows = computed(() => {
+    const counts = this.stats()?.counts ?? {};
+    const total = this.stats()?.total ?? 0;
+    return [5, 4, 3, 2, 1].map((star) => {
+      const count = counts[String(star)] ?? 0;
+      return { star, count, pct: total ? Math.round((count / total) * 100) : 0 };
+    });
+  });
+
+  protected readonly initials = initials;
+  protected readonly rupee = rupee;
 
   constructor() {
     this.api
@@ -335,22 +1065,40 @@ export class NoteDetailComponent {
         next: (r) => {
           this.note.set(r.data);
           this.loading.set(false);
+          // Only fetch a preview when there's a real (uploaded) PDF — dummy seed
+          // notes have placeholder paths, so we skip the request and show the mock.
+          if (r.data?.previewUrl?.startsWith('http')) this.loadPreview();
         },
         error: () => {
           this.note.set(null);
           this.loading.set(false);
         },
       });
+    this.refreshReviews();
+    this.loadMyReview();
+
+    this.destroyRef.onDestroy(() => {
+      if (this.previewObjectUrl) URL.revokeObjectURL(this.previewObjectUrl);
+    });
+  }
+
+  /** Embed the real first-pages PDF preview; on any error the mock stays. */
+  private loadPreview() {
     this.api
-      .getNoteReviews(this.id)
+      .getNotePreview(this.id)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (r) => this.reviews.set(r.data?.content ?? []),
+        next: (blob) => {
+          if (!blob || blob.size === 0) return;
+          this.previewObjectUrl = URL.createObjectURL(blob);
+          // #toolbar=0&navpanes=0 hides the browser's native PDF toolbar
+          // (download/print/zoom) — keeps the embed clean and view-only.
+          const src = this.previewObjectUrl + '#toolbar=0&navpanes=0&statusbar=0';
+          this.previewSrc.set(this.sanitizer.bypassSecurityTrustResourceUrl(src));
+        },
         error: () => {},
       });
   }
-
-  protected readonly initials = initials;
 
   protected buy() {
     if (!this.auth.isLoggedIn()) {
@@ -411,20 +1159,57 @@ export class NoteDetailComponent {
   protected submitReview() {
     if (this.submitting()) return;
     this.submitting.set(true);
+    const editing = !!this.myReview();
     this.api
       .submitReview(this.id, this.myRating(), this.myComment().trim())
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
           this.submitting.set(false);
-          this.toast.success('Thanks for your review!');
-          this.myComment.set('');
-          this.api
-            .getNoteReviews(this.id)
-            .pipe(takeUntilDestroyed(this.destroyRef))
-            .subscribe({ next: (r) => this.reviews.set(r.data?.content ?? []), error: () => {} });
+          this.toast.success(editing ? 'Your review was updated.' : 'Thanks for your review!');
+          this.refreshReviews();
+          this.loadMyReview();
         },
         error: () => this.submitting.set(false),
+      });
+  }
+
+  /** Pre-fills the form with the user's existing review and scrolls to it. */
+  protected editReview() {
+    const mine = this.myReview();
+    if (mine) {
+      this.myRating.set(mine.rating);
+      this.myComment.set(mine.comment ?? '');
+    }
+    document.getElementById('nd-write')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  private refreshReviews() {
+    this.api
+      .getNoteReviews(this.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({ next: (r) => this.reviews.set(r.data?.content ?? []), error: () => {} });
+    this.api
+      .getReviewStats(this.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({ next: (r) => this.stats.set(r.data ?? null), error: () => {} });
+  }
+
+  private loadMyReview() {
+    if (!this.auth.isLoggedIn()) return;
+    this.api
+      .getMyReview(this.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (r) => {
+          const mine = r.data ?? null;
+          this.myReview.set(mine);
+          if (mine) {
+            this.myRating.set(mine.rating);
+            this.myComment.set(mine.comment ?? '');
+          }
+        },
+        error: () => {},
       });
   }
 }

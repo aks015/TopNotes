@@ -15,30 +15,8 @@ import { ButtonComponent } from '@ui/button/button.component';
   styleUrls: ['../auth.css'],
   template: `
     <app-auth-shell>
-      <div brand>
-        <span class="eyebrow">★ Verified toppers only</span>
-        <h2 class="brand-headline">Notes from real toppers, <em>verified.</em></h2>
-        <p class="brand-sub">
-          Handwritten study notes from students who actually cracked JEE, NEET &amp; Boards — reviewed and rank-checked
-          before they reach you.
-        </p>
-        <div class="stats">
-          <div>
-            <div class="stat-num">2,400<small>+</small></div>
-            <div class="stat-label">Verified toppers</div>
-          </div>
-          <div>
-            <div class="stat-num">180k<small>+</small></div>
-            <div class="stat-label">Pages sold</div>
-          </div>
-          <div>
-            <div class="stat-num">4.9<small>★</small></div>
-            <div class="stat-label">Avg. rating</div>
-          </div>
-        </div>
-      </div>
-
       <div card>
+        <div class="kicker">good to see you again</div>
         <div class="card-head">
           <h1>Welcome back</h1>
           <p>Log in to access your notes library.</p>
@@ -62,6 +40,7 @@ import { ButtonComponent } from '@ui/button/button.component';
             formControlName="email"
             placeholder="you@example.com"
             autocomplete="email"
+            [autoFocus]="true"
             [invalid]="invalid('email')"
             [error]="emailError()"
           />
@@ -69,19 +48,23 @@ import { ButtonComponent } from '@ui/button/button.component';
           <app-text-field
             label="Password"
             type="password"
+            toggleMode="text"
             formControlName="password"
-            placeholder="Enter your password"
+            placeholder="Your password"
             autocomplete="current-password"
             [invalid]="invalid('password')"
             error="Please enter your password."
           />
 
-          <app-button type="submit" [block]="true" [loading]="loading()">Log in</app-button>
+          <app-button type="submit" size="lg" [block]="true" [loading]="loading()">Log in</app-button>
         </form>
 
         <div class="divider">OR</div>
         <p class="signup">New here? <a class="link" routerLink="/register">Create account</a></p>
-        <p class="legal">By continuing you agree to our <a href="#">Terms</a> &amp; <a href="#">Privacy Policy</a>.</p>
+        <p class="legal">
+          By continuing you agree to our <a routerLink="/terms">Terms</a> &amp;
+          <a routerLink="/privacy">Privacy Policy</a>.
+        </p>
       </div>
     </app-auth-shell>
   `,
@@ -121,7 +104,7 @@ export class LoginComponent {
     this.loading.set(true);
     const { email, password } = this.form.getRawValue();
     this.auth
-      .login(email, password)
+      .login(email.trim().toLowerCase(), password)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {

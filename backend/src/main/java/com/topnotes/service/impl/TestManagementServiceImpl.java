@@ -3,14 +3,18 @@ package com.topnotes.service.impl;
 import com.topnotes.dto.request.TestConfigRequest;
 import com.topnotes.dto.request.TestQuestionRequest;
 import com.topnotes.dto.response.TestConfigResponse;
+import com.topnotes.dto.response.TestOverviewResponse;
 import com.topnotes.dto.response.TestQuestionAdminResponse;
+import com.topnotes.entity.ExamCategory;
 import com.topnotes.entity.TestConfig;
 import com.topnotes.entity.TestOption;
 import com.topnotes.entity.TestQuestion;
 import com.topnotes.exception.BadRequestException;
 import com.topnotes.exception.ResourceNotFoundException;
+import com.topnotes.repository.ExamCategoryRepository;
 import com.topnotes.repository.TestConfigRepository;
 import com.topnotes.repository.TestQuestionRepository;
+import com.topnotes.repository.VerificationTestRepository;
 import com.topnotes.service.TestManagementService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -27,13 +31,55 @@ import java.util.Locale;
 @Slf4j
 public class TestManagementServiceImpl implements TestManagementService {
 
-    private final TestQuestionRepository questionRepository;
-    private final TestConfigRepository   configRepository;
+    private final TestQuestionRepository     questionRepository;
+    private final TestConfigRepository       configRepository;
+    private final ExamCategoryRepository     categoryRepository;
+    private final VerificationTestRepository attemptRepository;
 
     public TestManagementServiceImpl(TestQuestionRepository questionRepository,
-                                     TestConfigRepository   configRepository) {
+                                     TestConfigRepository configRepository,
+                                     ExamCategoryRepository categoryRepository,
+                                     VerificationTestRepository attemptRepository) {
         this.questionRepository = questionRepository;
         this.configRepository   = configRepository;
+        this.categoryRepository = categoryRepository;
+        this.attemptRepository  = attemptRepository;
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // OVERVIEW
+    // ══════════════════════════════════════════════════════════
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<TestOverviewResponse> getOverview() {
+        List<TestOverviewResponse> rows = new ArrayList<>();
+        TestConfig defaultCfg = getOrCreateDefaultConfig();
+
+        // General (shared) pool row
+        rows.add(new TestOverviewResponse(
+                null, "General (shared)",
+                Boolean.TRUE.equals(defaultCfg.getIsActive()),
+                defaultCfg.getPassScorePercent(), defaultCfg.getQuestionsPerTest(),
+                (int) questionRepository.countByCategoryIsNull(),
+                (int) questionRepository.countByCategoryIsNullAndIsActiveTrue(),
+                0L, 0));
+
+        for (ExamCategory cat : categoryRepository.findAllByOrderByDisplayOrderAscNameAsc()) {
+            if (!Boolean.TRUE.equals(cat.getActive())) continue;
+            TestConfig cfg = configRepository.findByCategoryId(cat.getId()).orElse(defaultCfg);
+            long attempts = attemptRepository.countByCategoryId(cat.getId());
+            long passed   = attemptRepository.countByCategoryIdAndPassedTrue(cat.getId());
+            int passRate  = attempts > 0 ? (int) Math.round(passed * 100.0 / attempts) : 0;
+            rows.add(new TestOverviewResponse(
+                    cat.getId(), cat.getName(),
+                    Boolean.TRUE.equals(cfg.getIsActive()),
+                    cfg.getPassScorePercent(), cfg.getQuestionsPerTest(),
+                    (int) questionRepository.countByCategoryId(cat.getId()),
+                    (int) questionRepository.countActiveForCategory(cat.getId()),
+                    attempts, passRate));
+        }
+        return rows;
     }
 
     // ══════════════════════════════════════════════════════════
@@ -41,10 +87,23 @@ public class TestManagementServiceImpl implements TestManagementService {
     // ══════════════════════════════════════════════════════════
 
     @Override
-    @Transactional(readOnly = true)
-    public TestConfigResponse getConfig() {
-        TestConfig config = getOrCreateDefaultConfig();
-        return toConfigResponse(config);
+    @Transactional
+    public TestConfigResponse getConfig(Long categoryId) {
+        if (categoryId == null) {
+            return toConfigResponse(getOrCreateDefaultConfig(), null, null);
+        }
+        ExamCategory cat = fetchCategory(categoryId);
+        TestConfig cfg = configRepository.findByCategoryId(categoryId).orElse(null);
+        if (cfg == null) {
+            // No row yet — return the Default's values as a template (not persisted).
+            TestConfig d = getOrCreateDefaultConfig();
+            cfg = TestConfig.builder()
+                    .passScorePercent(d.getPassScorePercent()).timeLimitMinutes(d.getTimeLimitMinutes())
+                    .maxAttempts(d.getMaxAttempts()).questionsPerTest(d.getQuestionsPerTest())
+                    .shuffleQuestions(d.getShuffleQuestions()).shuffleOptions(d.getShuffleOptions())
+                    .isActive(d.getIsActive()).build();
+        }
+        return toConfigResponse(cfg, cat.getId(), cat.getName());
     }
 
     @Override
@@ -55,9 +114,18 @@ public class TestManagementServiceImpl implements TestManagementService {
 
     @Override
     @Transactional
-    public TestConfigResponse updateConfig(TestConfigRequest request) {
-        TestConfig config = getOrCreateDefaultConfig();
-
+    public TestConfigResponse updateConfig(Long categoryId, TestConfigRequest request) {
+        ExamCategory cat = null;
+        TestConfig config;
+        if (categoryId == null) {
+            config = getOrCreateDefaultConfig();
+        } else {
+            cat = fetchCategory(categoryId);
+            ExamCategory fcat = cat;
+            config = configRepository.findByCategoryId(categoryId)
+                    .orElseGet(() -> TestConfig.builder().category(fcat).build());
+            config.setCategory(cat);
+        }
         config.setPassScorePercent(request.getPassScorePercent());
         config.setTimeLimitMinutes(request.getTimeLimitMinutes());
         config.setMaxAttempts(request.getMaxAttempts());
@@ -67,11 +135,9 @@ public class TestManagementServiceImpl implements TestManagementService {
         config.setIsActive(request.getIsActive());
 
         TestConfig saved = configRepository.save(config);
-        log.info("Test config updated: passScore={}% timeLimitMins={} maxAttempts={} questionsPerTest={}",
-                saved.getPassScorePercent(), saved.getTimeLimitMinutes(),
-                saved.getMaxAttempts(), saved.getQuestionsPerTest());
-
-        return toConfigResponse(saved);
+        log.info("Test config saved for {} (passScore={}%, perTest={})",
+                cat != null ? cat.getName() : "Default", saved.getPassScorePercent(), saved.getQuestionsPerTest());
+        return toConfigResponse(saved, cat != null ? cat.getId() : null, cat != null ? cat.getName() : null);
     }
 
     // ══════════════════════════════════════════════════════════
@@ -80,10 +146,11 @@ public class TestManagementServiceImpl implements TestManagementService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<TestQuestionAdminResponse> getAllQuestions(String keyword, Pageable pageable) {
-        Page<TestQuestion> questions = StringUtils.hasText(keyword)
-                ? questionRepository.searchByKeyword(keyword.trim().toLowerCase(Locale.ROOT), pageable)
-                : questionRepository.findAllByOrderByDisplayOrderAsc(pageable);
+    public Page<TestQuestionAdminResponse> getQuestions(Long categoryId, String keyword, Pageable pageable) {
+        String kw = StringUtils.hasText(keyword) ? keyword.trim().toLowerCase(Locale.ROOT) : "";
+        Page<TestQuestion> questions = (categoryId == null)
+                ? questionRepository.adminSearchGeneral(kw, pageable)
+                : questionRepository.adminSearchInCategory(categoryId, kw, pageable);
         return questions.map(this::toAdminResponse);
     }
 
@@ -106,6 +173,7 @@ public class TestManagementServiceImpl implements TestManagementService {
         TestQuestion question = TestQuestion.builder()
                 .questionText(request.getQuestionText())
                 .subject(request.getSubject())
+                .category(request.getCategoryId() != null ? fetchCategory(request.getCategoryId()) : null)
                 .displayOrder(order)
                 .isActive(request.getIsActive() != null ? request.getIsActive() : true)
                 .options(new ArrayList<>())
@@ -136,6 +204,7 @@ public class TestManagementServiceImpl implements TestManagementService {
 
         question.setQuestionText(request.getQuestionText());
         question.setSubject(request.getSubject());
+        question.setCategory(request.getCategoryId() != null ? fetchCategory(request.getCategoryId()) : null);
         if (request.getDisplayOrder() != null) {
             question.setDisplayOrder(request.getDisplayOrder());
         }
@@ -200,11 +269,17 @@ public class TestManagementServiceImpl implements TestManagementService {
     }
 
     private TestConfig getOrCreateDefaultConfig() {
-        return configRepository.findFirstByOrderByIdAsc()
+        return configRepository.findByCategoryIsNull()
+                .or(configRepository::findFirstByOrderByIdAsc)
                 .orElseGet(() -> {
                     log.info("No test config found — creating default config");
                     return configRepository.save(TestConfig.builder().build());
                 });
+    }
+
+    private ExamCategory fetchCategory(Long id) {
+        return categoryRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Category", id));
     }
 
     private void validateOptions(TestQuestionRequest request) {
@@ -259,10 +334,14 @@ public class TestManagementServiceImpl implements TestManagementService {
                 .build();
     }
 
-    private TestConfigResponse toConfigResponse(TestConfig c) {
-        long activeCount = questionRepository.countByIsActiveTrue();
+    private TestConfigResponse toConfigResponse(TestConfig c, Long categoryId, String categoryName) {
+        long activeCount = (categoryId == null)
+                ? questionRepository.countByCategoryIsNullAndIsActiveTrue()
+                : questionRepository.countActiveForCategory(categoryId);
         return TestConfigResponse.builder()
                 .id(c.getId())
+                .categoryId(categoryId)
+                .categoryName(categoryName)
                 .passScorePercent(c.getPassScorePercent())
                 .timeLimitMinutes(c.getTimeLimitMinutes())
                 .maxAttempts(c.getMaxAttempts())

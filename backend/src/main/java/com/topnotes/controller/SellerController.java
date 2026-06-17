@@ -73,6 +73,18 @@ public class SellerController {
                 noteService.getSellerNotes(principal.getId(), pageable)));
     }
 
+    @GetMapping("/notes/trash")
+    @Operation(summary = "Soft-deleted notes the seller can restore")
+    public ResponseEntity<ApiResponse<Page<NoteResponse>>> getTrash(
+            @RequestParam(defaultValue = "0")  int page,
+            @RequestParam(defaultValue = "20") int size,
+            @AuthenticationPrincipal CustomUserDetails principal) {
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "updatedAt"));
+        return ResponseEntity.ok(ApiResponse.success(
+                noteService.getSellerTrash(principal.getId(), pageable)));
+    }
+
     // ── Sales history ─────────────────────────────────────────
 
     @GetMapping("/sales")

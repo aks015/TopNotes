@@ -46,4 +46,13 @@ public class AuthController {
         AuthResponse response = authService.login(request);
         return ResponseEntity.ok(ApiResponse.success("Login successful", response));
     }
+
+    @PostMapping("/refresh")
+    @Operation(summary = "Exchange a valid refresh token for a fresh access token")
+    public ResponseEntity<ApiResponse<AuthResponse>> refresh(
+            @RequestBody java.util.Map<String, String> body) {
+
+        AuthResponse response = authService.refreshAccessToken(body.get("refreshToken"));
+        return ResponseEntity.ok(ApiResponse.success("Token refreshed", response));
+    }
 }

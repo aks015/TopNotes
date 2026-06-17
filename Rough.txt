@@ -54,3 +54,29 @@ Lighthouse pass → fix any perf/a11y/SEO findings; target ≥90.
 Dependency summary
 Pure frontend (I can do solo): Phase 1, 2, 3 (most), 5 (CI/Sentry/SEO), 6.
 Needs Akshat: JWT-cookie, real Razorpay, content protection, forgot-password endpoint, exact sort/filter params.
+
+
+
+
+
+Edit a published listing — today only price is editable. Sellers should edit title/description/subject/cover and replace the PDF (re-count pages). High value, currently a real gap.
+Auto-generate cover from PDF page 1 — most sellers skip the cover; render page 1 server-side as the thumbnail so every card looks rich without manual work.
+Preview the actual PDF first pages before publishing — reuse the existing /preview pipeline so the seller confirms they attached the right file.
+Save as draft / autosave — don’t lose a half-filled listing on refresh; publish later.
+Suggested price — show the median price for the same subject+exam to guide pricing (uses data we already have).
+Originality checkbox — “I confirm these are my own notes” before publish (trust + legal).
+Real upload progress bar — HttpClient reportProgress for big PDFs (50MB feels broken without it).
+Admin-configurable taxonomy — Class/Subject/Exam are still hardcoded in the form; move them to backend config to match the “everything dynamic/admin-configurable” goal.
+
+
+
+
+************ Sandeep ki gaand masti ***********
+
+-> user profile where buyer can see what all notes does that seller had 
+-> Add phone number on signup 
+-> otp verification 
+-> become a seller -> selected seller signup step 
+-> back issue ( usehistory)
+-> note authentication by sign in the concent 
+-> 

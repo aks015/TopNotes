@@ -14,4 +14,10 @@ import java.util.Optional;
 @Repository
 public interface TestConfigRepository extends JpaRepository<TestConfig, Long> {
     Optional<TestConfig> findFirstByOrderByIdAsc();
+
+    /** Per-category config row, if one exists. */
+    Optional<TestConfig> findByCategoryId(Long categoryId);
+
+    /** The global "Default" config (category_id IS NULL). */
+    Optional<TestConfig> findByCategoryIsNull();
 }

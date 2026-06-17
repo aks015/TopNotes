@@ -26,4 +26,26 @@ public interface PayoutRepository extends JpaRepository<PayoutRequest, Long> {
     Page<PayoutRequest> findByStatusOrderByRequestedAtAsc(PayoutStatus status, Pageable pageable);
 
     Page<PayoutRequest> findBySellerIdOrderByRequestedAtDesc(Long sellerId, Pageable pageable);
+
+    /** Count of payouts in a given state (drives the admin stat cards + tab counts). */
+    long countByStatus(PayoutStatus status);
+
+    /** Platform-wide sum of amounts in a given state (e.g. total disbursed). */
+    @Query("SELECT COALESCE(SUM(p.amount), 0) FROM PayoutRequest p WHERE p.status = :status")
+    BigDecimal sumByStatus(@Param("status") PayoutStatus status);
+
+    /**
+     * Admin payout list with optional status filter + keyword (seller name or UPI).
+     * A null status returns every state; a null/blank keyword skips the text match.
+     * Ordering comes from the Pageable so the controller can keep PENDING FIFO.
+     */
+    @Query("""
+            SELECT p FROM PayoutRequest p
+            WHERE (:status IS NULL OR p.status = :status)
+              AND (:kw IS NULL OR LOWER(p.seller.fullName) LIKE LOWER(CONCAT('%', :kw, '%'))
+                               OR LOWER(p.upiId)           LIKE LOWER(CONCAT('%', :kw, '%')))
+            """)
+    Page<PayoutRequest> search(@Param("status") PayoutStatus status,
+                               @Param("kw") String kw,
+                               Pageable pageable);
 }

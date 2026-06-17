@@ -111,6 +111,13 @@
             <version>1.36.0</version>
         </dependency>
 
+        <!-- ── PDF (first-N-page preview extraction) ── -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.2</version>
+        </dependency>
+
     </dependencies>
 
     <build>

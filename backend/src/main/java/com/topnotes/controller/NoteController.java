@@ -4,11 +4,13 @@ import com.topnotes.dto.request.NoteCreateRequest;
 import com.topnotes.dto.request.PriceUpdateRequest;
 import com.topnotes.dto.response.ApiResponse;
 import com.topnotes.dto.response.NoteResponse;
-import com.topnotes.entity.enums.ExamType;
+import com.topnotes.dto.response.ReviewResponse;
+import com.topnotes.dto.response.ReviewStatsResponse;
 import com.topnotes.exception.UnauthorizedException;
 import com.topnotes.security.CustomUserDetails;
 import com.topnotes.service.NoteService;
 import com.topnotes.service.PurchaseService;
+import com.topnotes.service.ReviewService;
 import com.topnotes.util.FileUploadUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -42,13 +44,16 @@ public class NoteController {
 
     private final NoteService     noteService;
     private final PurchaseService purchaseService;
+    private final ReviewService   reviewService;
     private final FileUploadUtil  fileUploadUtil;
 
     public NoteController(NoteService noteService,
                           PurchaseService purchaseService,
+                          ReviewService reviewService,
                           FileUploadUtil fileUploadUtil) {
         this.noteService     = noteService;
         this.purchaseService = purchaseService;
+        this.reviewService   = reviewService;
         this.fileUploadUtil  = fileUploadUtil;
     }
 
@@ -57,20 +62,38 @@ public class NoteController {
     @GetMapping
     @Operation(summary = "Search/browse notes with optional filters and pagination")
     public ResponseEntity<ApiResponse<Page<NoteResponse>>> searchNotes(
-            @RequestParam(required = false) String    keyword,
-            @RequestParam(required = false) String    classLevel,
-            @RequestParam(required = false) String    subject,
-            @RequestParam(required = false) ExamType  examType,
+            @RequestParam(required = false) String       keyword,
+            @RequestParam(required = false) List<String> category,
+            @RequestParam(required = false) List<String> exam,
+            @RequestParam(required = false) List<String> subject,
+            @RequestParam(required = false) String       sort,
             @RequestParam(defaultValue = "0")  int   page,
             @RequestParam(defaultValue = "12") int   size,
             @AuthenticationPrincipal CustomUserDetails principal) {
 
         Long viewerId = (principal != null) ? principal.getId() : null;
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Pageable pageable = PageRequest.of(page, size, resolveSort(sort));
 
+        // Spring binds repeated (?subject=A&subject=B) or comma-joined (?subject=A,B) params.
         Page<NoteResponse> result = noteService.searchNotes(
-                keyword, classLevel, subject, examType, pageable, viewerId);
+                keyword, category, exam, subject, pageable, viewerId);
         return ResponseEntity.ok(ApiResponse.success(result));
+    }
+
+    /** Maps the browse "Sort:" dropdown value to a JPA Sort. Default = most popular. */
+    private Sort resolveSort(String sort) {
+        return switch (sort == null ? "" : sort) {
+            case "rating"    -> Sort.by(Sort.Direction.DESC, "averageRating").and(Sort.by(Sort.Direction.DESC, "purchaseCount"));
+            case "priceAsc"  -> Sort.by(Sort.Direction.ASC,  "price");
+            case "priceDesc" -> Sort.by(Sort.Direction.DESC, "price");
+            case "newest"    -> Sort.by(Sort.Direction.DESC, "createdAt");
+            // "Featured" (landing showcase): best sellers that are also best-rated.
+            case "featured"  -> Sort.by(Sort.Direction.DESC, "purchaseCount")
+                                     .and(Sort.by(Sort.Direction.DESC, "averageRating"))
+                                     .and(Sort.by(Sort.Direction.DESC, "createdAt"));
+            // "Most popular" (default): most sales first, newest as tie-breaker.
+            default          -> Sort.by(Sort.Direction.DESC, "purchaseCount").and(Sort.by(Sort.Direction.DESC, "createdAt"));
+        };
     }
 
     @GetMapping("/{id}")
@@ -84,21 +107,76 @@ public class NoteController {
     }
 
     @GetMapping("/filters")
-    @Operation(summary = "Get available filter options for subjects and class levels")
+    @Operation(summary = "Get available filter options for categories, exams and subjects")
     public ResponseEntity<ApiResponse<Map<String, List<String>>>> getFilterOptions() {
         return ResponseEntity.ok(ApiResponse.success(noteService.getFilterOptions()));
     }
 
+    @GetMapping("/price-suggestion")
+    @Operation(summary = "Median price of comparable active notes (same exam + subject)")
+    public ResponseEntity<ApiResponse<com.topnotes.dto.response.PriceSuggestionResponse>> getPriceSuggestion(
+            @RequestParam String exam,
+            @RequestParam String subject) {
+        return ResponseEntity.ok(ApiResponse.success(noteService.getPriceSuggestion(exam, subject)));
+    }
+
+    // ── Public: Reviews (read) ────────────────────────────────
+
+    @GetMapping("/{id}/reviews")
+    @Operation(summary = "Public paginated reviews for a note")
+    public ResponseEntity<ApiResponse<Page<ReviewResponse>>> getReviews(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "0")  int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return ResponseEntity.ok(ApiResponse.success(reviewService.getNoteReviews(id, pageable)));
+    }
+
+    @GetMapping("/{id}/reviews/stats")
+    @Operation(summary = "Public aggregate review stats (average, total, per-star counts)")
+    public ResponseEntity<ApiResponse<ReviewStatsResponse>> getReviewStats(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(reviewService.getReviewStats(id)));
+    }
+
     // ── Public: First-page PDF Preview ───────────────────────
 
+    /** Number of leading pages exposed for free in the public preview. */
+    private static final int PREVIEW_PAGES = 3;
+
     @GetMapping("/{id}/preview")
-    @Operation(summary = "Stream first-page PDF preview inline (no download)")
+    @Operation(summary = "Stream the first few pages of the note as an inline PDF preview")
     public ResponseEntity<byte[]> getPreview(@PathVariable Long id) {
         NoteResponse note = noteService.getNoteById(id, null);
-        if (note.getPreviewUrl() == null) {
+        String url = note.getPreviewUrl();
+        if (url == null || url.isBlank()) {
             return ResponseEntity.notFound().build();
         }
-        return servePdfInline(note.getPreviewUrl());
+        try {
+            byte[] firstPages = extractFirstPages(fileUploadUtil.readFileBytes(url), PREVIEW_PAGES);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_PDF);
+            headers.setContentDisposition(ContentDisposition.inline().build());
+            headers.set("Cache-Control", "no-store");
+            headers.set("X-Content-Type-Options", "nosniff");
+            return ResponseEntity.ok().headers(headers).body(firstPages);
+        } catch (Exception e) {
+            // No real PDF behind this note (e.g. seed data) → let the SPA fall back.
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    /** Returns a new PDF containing only the first {@code max} pages of the source. */
+    private byte[] extractFirstPages(byte[] source, int max) throws IOException {
+        try (org.apache.pdfbox.pdmodel.PDDocument doc = org.apache.pdfbox.Loader.loadPDF(source)) {
+            while (doc.getNumberOfPages() > max) {
+                doc.removePage(doc.getNumberOfPages() - 1);
+            }
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            doc.save(out);
+            return out.toByteArray();
+        }
     }
 
     // ── BUYER: Secure full-note view ──────────────────────────
@@ -142,6 +220,23 @@ public class NoteController {
                 .body(ApiResponse.success("Note uploaded successfully", created));
     }
 
+    // ── SELLER: Edit listing ──────────────────────────────────
+
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('SELLER')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Edit a listing's fields, optionally replacing the PDF/cover (SELLER — own notes only)")
+    public ResponseEntity<ApiResponse<NoteResponse>> updateNote(
+            @PathVariable Long id,
+            @RequestPart("data")                                @Valid com.topnotes.dto.request.NoteUpdateRequest request,
+            @RequestPart(value = "pdf",       required = false)       MultipartFile pdf,
+            @RequestPart(value = "thumbnail", required = false)       MultipartFile thumbnail,
+            @AuthenticationPrincipal CustomUserDetails principal) {
+
+        NoteResponse updated = noteService.updateNote(id, request, pdf, thumbnail, principal.getId());
+        return ResponseEntity.ok(ApiResponse.success("Listing updated", updated));
+    }
+
     // ── SELLER: Update price ──────────────────────────────────
 
     @PatchMapping("/{id}/price")
@@ -155,6 +250,43 @@ public class NoteController {
 
         NoteResponse updated = noteService.updatePrice(id, request, principal.getId());
         return ResponseEntity.ok(ApiResponse.success("Price updated successfully", updated));
+    }
+
+    @PatchMapping("/{id}/visibility")
+    @PreAuthorize("hasRole('SELLER')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Publish/unpublish a listing (SELLER — own notes only)")
+    public ResponseEntity<ApiResponse<NoteResponse>> setVisibility(
+            @PathVariable Long id,
+            @RequestParam boolean active,
+            @AuthenticationPrincipal CustomUserDetails principal) {
+
+        NoteResponse updated = noteService.setVisibility(id, active, principal.getId());
+        return ResponseEntity.ok(ApiResponse.success(active ? "Listing published" : "Listing hidden", updated));
+    }
+
+    @PostMapping("/{id}/clone")
+    @PreAuthorize("hasRole('SELLER')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Duplicate a listing as a hidden draft (SELLER — own notes only)")
+    public ResponseEntity<ApiResponse<NoteResponse>> cloneNote(
+            @PathVariable Long id,
+            @AuthenticationPrincipal CustomUserDetails principal) {
+
+        NoteResponse clone = noteService.cloneNote(id, principal.getId());
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Listing cloned", clone));
+    }
+
+    @PatchMapping("/{id}/restore")
+    @PreAuthorize("hasRole('SELLER')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Restore a soft-deleted listing (SELLER — own notes only)")
+    public ResponseEntity<ApiResponse<NoteResponse>> restoreNote(
+            @PathVariable Long id,
+            @AuthenticationPrincipal CustomUserDetails principal) {
+
+        NoteResponse restored = noteService.restoreNote(id, principal.getId());
+        return ResponseEntity.ok(ApiResponse.success("Listing restored", restored));
     }
 
     // ── SELLER: Delete note ───────────────────────────────────
