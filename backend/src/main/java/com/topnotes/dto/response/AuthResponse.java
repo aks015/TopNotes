@@ -18,6 +18,7 @@ public class AuthResponse {
     private String   profileImageUrl;
     private UserRole role;
     private Boolean  isVerified;
+    private Boolean  emailVerified;
     private LocalDateTime createdAt;
     private String   token;
     private String   refreshToken;

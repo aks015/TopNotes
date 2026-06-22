@@ -17,6 +17,11 @@
         </div>
         <div class="lp-nav-actions">
           @if (isLoggedIn()) {
+            @if (isBuyerOnly()) {
+              <button class="lp-link" (click)="becomeSeller()" [disabled]="upgrading()">
+                {{ upgrading() ? 'Starting…' : 'Become a seller' }}
+              </button>
+            }
             <a class="lp-btn-dark" [routerLink]="workspaceLink()">Go to app</a>
             <div class="lp-acct">
               <button class="lp-acct-btn" (click)="toggleAcct($event)" aria-label="Account menu">
@@ -59,27 +64,46 @@
               }
             } @else {
               {{ content.hero?.title }}
-              <span class="lp-mark" [style.background]="markBg(content.hero?.highlightColor)">{{ content.hero?.highlight }}</span>
+              <span class="lp-mark" [style.background]="markBg(content.hero?.highlightColor)">{{
+                content.hero?.highlight
+              }}</span>
               {{ content.hero?.titleAfter }}
             }
           </h1>
           <p class="lp-hero-sub">{{ content.hero?.subtitle }}</p>
           <div class="lp-hero-cta">
             @if (isExternal(content.hero?.ctaPrimaryLink)) {
-              <a class="lp-btn-primary" [href]="content.hero?.ctaPrimaryLink">{{ content.hero?.ctaPrimary || 'Browse notes' }}</a>
+              <a class="lp-btn-primary" [href]="content.hero?.ctaPrimaryLink">{{
+                content.hero?.ctaPrimary || 'Browse notes'
+              }}</a>
             } @else {
-              <a class="lp-btn-primary" [routerLink]="content.hero?.ctaPrimaryLink || '/browse'">{{ content.hero?.ctaPrimary || 'Browse notes' }}</a>
+              <a class="lp-btn-primary" [routerLink]="content.hero?.ctaPrimaryLink || '/browse'">{{
+                content.hero?.ctaPrimary || 'Browse notes'
+              }}</a>
             }
             @if (!isLoggedIn()) {
               @if (isExternal(content.hero?.ctaSecondaryLink)) {
-                <a class="lp-btn-ghost" [href]="content.hero?.ctaSecondaryLink">{{ content.hero?.ctaSecondary || 'Become a seller' }}</a>
+                <a class="lp-btn-ghost" [href]="content.hero?.ctaSecondaryLink">{{
+                  content.hero?.ctaSecondary || 'Become a seller'
+                }}</a>
               } @else {
-                <a class="lp-btn-ghost" [routerLink]="content.hero?.ctaSecondaryLink || '/register'" [queryParams]="regSellerQP(content.hero?.ctaSecondaryLink)">{{ content.hero?.ctaSecondary || 'Become a seller' }}</a>
+                <a
+                  class="lp-btn-ghost"
+                  [routerLink]="content.hero?.ctaSecondaryLink || '/register'"
+                  [queryParams]="regSellerQP(content.hero?.ctaSecondaryLink)"
+                  >{{ content.hero?.ctaSecondary || 'Become a seller' }}</a
+                >
               }
             } @else if (isBuyerOnly()) {
-              <a class="lp-btn-ghost" routerLink="/account">{{ content.hero?.ctaSecondary || 'Become a seller' }}</a>
+              <button class="lp-btn-ghost" (click)="becomeSeller()" [disabled]="upgrading()">
+                {{ upgrading() ? 'Starting…' : content.hero?.ctaSecondary || 'Become a seller' }}
+              </button>
             } @else if (canSell()) {
-              <a class="lp-btn-ghost" routerLink="/seller/upload">Upload a note</a>
+              @if (isVerified()) {
+                <a class="lp-btn-ghost" routerLink="/seller/upload">Upload a note</a>
+              } @else {
+                <a class="lp-btn-ghost" routerLink="/seller/qualifications">Become a seller</a>
+              }
             }
           </div>
           @if (stats(); as s) {
@@ -100,8 +124,8 @@
                         <span [style.color]="on ? null : '#d9d3c2'">★</span>
                       }
                     </span>
-                    &nbsp; <strong>{{ s.averageRating | number: '1.1-1' }}</strong>
-                    from {{ s.reviewCount }} {{ s.reviewCount === 1 ? 'review' : 'reviews' }}
+                    &nbsp; <strong>{{ s.averageRating | number: '1.1-1' }}</strong> from {{ s.reviewCount }}
+                    {{ s.reviewCount === 1 ? 'review' : 'reviews' }}
                   } @else {
                     <strong>{{ s.learners }}</strong> {{ s.learners === 1 ? 'learner' : 'learners' }} and counting
                   }
@@ -117,9 +141,15 @@
             @if (notes()[1]; as n1) {
               <a class="lp-card-back" [routerLink]="['/notes', n1.id]">
                 <div class="lp-card-head">
-                  <span class="lp-tag-indigo" [style.background]="subjectBg(n1.subject)" [style.color]="subjectFg(n1.subject)"
-                    >{{ n1.subject }}@if (n1.examType) { · {{ examLabel(n1.examType) }} }</span
-                  >
+                  <span
+                    class="lp-tag-indigo"
+                    [style.background]="subjectBg(n1.subject)"
+                    [style.color]="subjectFg(n1.subject)"
+                    >{{ n1.subject }}
+                    @if (n1.examType) {
+                      · {{ examLabel(n1.examType) }}
+                    }
+                  </span>
                   @if (n1.totalPages) {
                     <span class="lp-pg">{{ n1.totalPages }} pages</span>
                   }
@@ -134,9 +164,15 @@
             }
             <a class="lp-card-front" [routerLink]="['/notes', n0.id]">
               <div class="lp-card-head">
-                <span class="lp-tag-indigo" [style.background]="subjectBg(n0.subject)" [style.color]="subjectFg(n0.subject)"
-                  >{{ n0.subject }}@if (n0.examType) { · {{ examLabel(n0.examType) }} }</span
-                >
+                <span
+                  class="lp-tag-indigo"
+                  [style.background]="subjectBg(n0.subject)"
+                  [style.color]="subjectFg(n0.subject)"
+                  >{{ n0.subject }}
+                  @if (n0.examType) {
+                    · {{ examLabel(n0.examType) }}
+                  }
+                </span>
                 @if (n0.totalPages) {
                   <span class="lp-pg">{{ n0.totalPages }} pages</span>
                 }
@@ -152,20 +188,26 @@
                   initials(n0.seller?.fullName || 'T')
                 }}</span>
                 <div class="lp-card-meta">
-                  <div class="lp-card-name">{{ n0.seller?.fullName || 'Verified topper' }} <span class="lp-verify">✓</span></div>
+                  <div class="lp-card-name">
+                    {{ n0.seller?.fullName || 'Verified topper' }} <span class="lp-verify">✓</span>
+                  </div>
                   <div class="lp-card-rank">{{ n0.seller?.institution || 'Verified topper' }}</div>
                 </div>
                 <div class="lp-card-price">₹{{ n0.price }}</div>
               </div>
             </a>
-            <div class="lp-chip lp-chip-dark"><span class="lp-green">✓</span> {{ content.hero?.badgeVerified || 'Marksheet verified' }}</div>
+            <div class="lp-chip lp-chip-dark">
+              <span class="lp-green">✓</span> {{ content.hero?.badgeVerified || 'Marksheet verified' }}
+            </div>
             <div class="lp-chip lp-chip-light">
               @if (n0.reviewCount) {
                 <span class="lp-gold">★ {{ n0.averageRating || 0 | number: '1.1-1' }}</span>
               } @else {
                 <span class="lp-gold">New</span>
               }
-              @if (n0.purchaseCount) { · {{ n0.purchaseCount }} sold }
+              @if (n0.purchaseCount) {
+                · {{ n0.purchaseCount }} sold
+              }
             </div>
             <div class="lp-hand-note">{{ content.hero?.handwritingNote || 'real handwriting ↓' }}</div>
           </div>
@@ -194,7 +236,12 @@
           @for (rep of [0, 1]; track rep) {
             <div class="lp-marquee-group">
               @for (t of marqueeItems(); track $index) {
-                <span class="lp-marquee-item">{{ t }} @if (marqueeSep()) { <span class="lp-marquee-dot">{{ marqueeSep() }}</span> }</span>
+                <span class="lp-marquee-item"
+                  >{{ t }}
+                  @if (marqueeSep()) {
+                    <span class="lp-marquee-dot">{{ marqueeSep() }}</span>
+                  }
+                </span>
               }
             </div>
           }
@@ -211,9 +258,13 @@
             <h2 class="lp-h2">{{ content.notesPreview?.heading || 'Trending notes this week' }}</h2>
           </div>
           @if (isExternal(content.notesPreview?.linkHref)) {
-            <a class="lp-viewall" [href]="content.notesPreview?.linkHref">{{ content.notesPreview?.linkText || 'View all notes' }} →</a>
+            <a class="lp-viewall" [href]="content.notesPreview?.linkHref"
+              >{{ content.notesPreview?.linkText || 'View all notes' }} →</a
+            >
           } @else {
-            <a class="lp-viewall" [routerLink]="content.notesPreview?.linkHref || '/browse'">{{ content.notesPreview?.linkText || 'View all notes' }} →</a>
+            <a class="lp-viewall" [routerLink]="content.notesPreview?.linkHref || '/browse'"
+              >{{ content.notesPreview?.linkText || 'View all notes' }} →</a
+            >
           }
         </div>
         <div class="lp-notes-grid">
@@ -299,7 +350,9 @@
           <div class="lp-feats">
             @for (f of content.features?.items ?? []; track f.title; let i = $index) {
               <div class="lp-feat" [class.amber]="i % 2 === 1">
-                @if (f.icon) { <lucide-icon class="lp-feat-ic" [name]="f.icon" [size]="24" /> }
+                @if (f.icon) {
+                  <lucide-icon class="lp-feat-ic" [name]="f.icon" [size]="24" />
+                }
                 <div class="lp-feat-title">{{ f.title }}</div>
                 <div class="lp-feat-desc">{{ f.desc }}</div>
               </div>
@@ -368,11 +421,21 @@
                       <lucide-icon class="lp-founder-verify" name="badge-check" [size]="18" />
                     }
                   </div>
-                  @if (m.bio) { <div class="lp-founder-bio">{{ m.bio }}</div> }
+                  @if (m.bio) {
+                    <div class="lp-founder-bio">{{ m.bio }}</div>
+                  }
                   <div class="lp-founder-meta">
-                    @if (m.role) { <span class="lp-founder-role-chip">{{ m.role }}</span> }
+                    @if (m.role) {
+                      <span class="lp-founder-role-chip">{{ m.role }}</span>
+                    }
                     @if (m.linkedin) {
-                      <a class="lp-founder-cta" [href]="m.linkedin" target="_blank" rel="noopener" aria-label="LinkedIn profile">
+                      <a
+                        class="lp-founder-cta"
+                        [href]="m.linkedin"
+                        target="_blank"
+                        rel="noopener"
+                        aria-label="LinkedIn profile"
+                      >
                         <lucide-icon name="linkedin" [size]="15" /> Connect
                       </a>
                     }
@@ -426,7 +489,9 @@
               @if (isExternal(content.cta?.buttonLink)) {
                 <a class="lp-cta-btn" [href]="content.cta?.buttonLink">{{ content.cta?.button || 'Get started' }}</a>
               } @else {
-                <a class="lp-cta-btn" [routerLink]="content.cta?.buttonLink || '/register'">{{ content.cta?.button || 'Get started' }}</a>
+                <a class="lp-cta-btn" [routerLink]="content.cta?.buttonLink || '/register'">{{
+                  content.cta?.button || 'Get started'
+                }}</a>
               }
             } @else {
               <a class="lp-cta-btn" [routerLink]="workspaceLink()">{{ workspaceLabel() }}</a>
@@ -435,7 +500,6 @@
         </div>
       </section>
     }
-
   </div>
 } @else if (loading()) {
   <div class="lp-loading">Loading…</div>

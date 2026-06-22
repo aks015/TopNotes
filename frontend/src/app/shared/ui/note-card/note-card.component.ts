@@ -17,7 +17,7 @@ import { examLabel, initials, rupee, subjectLinedPaper, subjectPaper } from '@sh
           <img class="tnc-img" [src]="note().thumbnailUrl" [alt]="note().title" loading="lazy" />
         }
         <div class="tnc-row">
-          @if (note().subject) {
+          @if (showSubjectTag()) {
             <span class="tnc-tag" [style.background]="paper().accent">{{ subjectUpper() }}</span>
           }
           @if (note().examType) {
@@ -271,6 +271,12 @@ export class NoteCardComponent {
   protected coverBg = computed(() => subjectLinedPaper(this.note().subject));
   protected hasThumb = computed(() => !!this.note().thumbnailUrl);
   protected subjectUpper = computed(() => (this.note().subject ?? '').toUpperCase());
+  /** Hide the subject tag when it just repeats the title (avoids a duplicate-looking card). */
+  protected showSubjectTag = computed(() => {
+    const s = (this.note().subject ?? '').trim().toLowerCase();
+    const t = (this.note().title ?? '').trim().toLowerCase();
+    return !!s && s !== t;
+  });
   protected examLabel = computed(() => this.note().exam || examLabel(this.note().examType));
   protected sellerInitials = computed(() => initials(this.note().seller?.fullName));
   protected ratingText = computed(() => (this.note().averageRating ?? 0).toFixed(1));

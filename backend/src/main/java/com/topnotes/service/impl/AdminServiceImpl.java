@@ -2,10 +2,13 @@ package com.topnotes.service.impl;
 
 import com.topnotes.dto.request.ConfigUpdateRequest;
 import com.topnotes.dto.response.NoteResponse;
+import com.topnotes.dto.response.PendingNoteResponse;
 import com.topnotes.dto.response.UserResponse;
+import com.topnotes.entity.Note;
 import com.topnotes.entity.PlatformConfig;
 import com.topnotes.entity.User;
 import com.topnotes.entity.enums.NoteStatus;
+import com.topnotes.entity.enums.NotificationType;
 import com.topnotes.entity.enums.UserRole;
 import com.topnotes.entity.enums.UserStatus;
 import com.topnotes.exception.BadRequestException;
@@ -15,6 +18,7 @@ import com.topnotes.repository.PlatformConfigRepository;
 import com.topnotes.repository.UserRepository;
 import com.topnotes.service.AdminService;
 import com.topnotes.service.NoteService;
+import com.topnotes.service.NotificationService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -32,15 +36,63 @@ public class AdminServiceImpl implements AdminService {
     private final NoteRepository           noteRepository;
     private final PlatformConfigRepository configRepository;
     private final NoteService              noteService;
+    private final NotificationService      notificationService;
 
     public AdminServiceImpl(UserRepository userRepository,
                             NoteRepository noteRepository,
                             PlatformConfigRepository configRepository,
-                            NoteService noteService) {
+                            NoteService noteService,
+                            NotificationService notificationService) {
         this.userRepository   = userRepository;
         this.noteRepository   = noteRepository;
         this.configRepository = configRepository;
         this.noteService      = noteService;
+        this.notificationService = notificationService;
+    }
+
+    // ── Note content review ───────────────────────────────────
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<PendingNoteResponse> getPendingNotes(Pageable pageable) {
+        return noteRepository.findByStatus(NoteStatus.PENDING_REVIEW, pageable).map(n -> {
+            User s = n.getSeller();
+            return new PendingNoteResponse(n.getId(), n.getTitle(), n.getDescription(),
+                    n.getCategory(), n.getExam(), n.getSubject(), n.getClassLevel(),
+                    n.getPrice(), n.getThumbnailUrl(), n.getPdfUrl(), n.getTotalPages(),
+                    s.getId(), s.getFullName(), s.getEmail(), n.getCreatedAt());
+        });
+    }
+
+    @Override
+    @Transactional
+    public void reviewNote(Long noteId, boolean approved, String reason) {
+        Note note = noteRepository.findById(noteId)
+                .orElseThrow(() -> new ResourceNotFoundException("Note", noteId));
+        if (note.getStatus() != NoteStatus.PENDING_REVIEW) {
+            throw new BadRequestException("This note isn't pending review.");
+        }
+        if (!approved && (reason == null || reason.isBlank())) {
+            throw new BadRequestException("A reason is required when rejecting a note.");
+        }
+        note.setStatus(approved ? NoteStatus.ACTIVE : NoteStatus.REJECTED);
+        // Mark the current content as admin-approved so the seller may hide/republish it
+        // later without re-review. Any future content change resets this (see NoteServiceImpl).
+        if (approved) {
+            note.setApproved(true);
+            note.setRejectionReason(null);
+        } else {
+            note.setRejectionReason(reason);
+        }
+        noteRepository.save(note);
+
+        notificationService.createNotification(note.getSeller(),
+                approved ? "Notes approved & live 🎉" : "Notes need changes",
+                approved
+                        ? "Your notes \"" + note.getTitle() + "\" passed review and are now live on TopNotes."
+                        : "Your notes \"" + note.getTitle() + "\" weren't approved. Reason: " + reason,
+                NotificationType.SYSTEM);
+        log.info("Note {} review: approved={}", noteId, approved);
     }
 
     // ── User management ───────────────────────────────────────

@@ -6,19 +6,20 @@ import { ApiService } from '@core/services/api.service';
 import { LandingContent } from '@core/models';
 import { ToastComponent } from '@ui/toast/toast.component';
 import { ConfirmDialogComponent } from '@ui/confirm-dialog/confirm-dialog.component';
+import { ConsentDialogComponent } from '@ui/consent-dialog/consent-dialog.component';
 import { SiteFooterComponent } from '@layout/site-footer/site-footer.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, ToastComponent, ConfirmDialogComponent, SiteFooterComponent],
+  imports: [RouterOutlet, ToastComponent, ConfirmDialogComponent, ConsentDialogComponent, SiteFooterComponent],
   template: `
     <router-outlet />
     @if (showFooter()) {
       <app-site-footer [footer]="footer()" />
     }
-    <app-toast /><app-confirm />
+    <app-toast /><app-confirm /><app-consent />
   `,
 })
 export class AppComponent {
