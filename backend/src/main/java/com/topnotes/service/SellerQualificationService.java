@@ -23,8 +23,8 @@ public interface SellerQualificationService {
     /** Grade a submitted category test and update the qualification. */
     TestResultResponse submitTest(Long sellerId, Long categoryId, Map<Long, String> answers);
 
-    /** Upload the marksheet for a passed category, moving it to admin review. */
-    String uploadMarksheet(Long sellerId, Long categoryId, MultipartFile marksheet);
+    /** Upload the marksheet (+ declared institution) for a passed category, moving it to admin review. */
+    String uploadMarksheet(Long sellerId, Long categoryId, MultipartFile marksheet, String institution);
 
     // ── Admin ──
     Page<QualificationReviewResponse> getPendingReview(Pageable pageable);

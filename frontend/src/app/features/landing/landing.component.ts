@@ -1,10 +1,12 @@
 import { DecimalPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, HostListener, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { LucideAngularModule } from 'lucide-angular';
 import { ApiService } from '@core/services/api.service';
 import { AuthService } from '@core/services/auth.service';
+import { ToastService } from '@core/services/toast.service';
+import { ConsentDialogService } from '@core/services/consent-dialog.service';
 import { LandingContent, Note, SocialStats } from '@core/models';
 import { examLabel } from '@shared/util/note-display';
 import { LogoComponent } from '@ui/logo/logo.component';
@@ -20,7 +22,13 @@ import { LogoComponent } from '@ui/logo/logo.component';
 export class LandingComponent {
   private api = inject(ApiService);
   private auth = inject(AuthService);
+  private router = inject(Router);
+  private toast = inject(ToastService);
+  private consent = inject(ConsentDialogService);
   private destroyRef = inject(DestroyRef);
+
+  /** In-flight buyer→seller upgrade (from the "Become a seller" CTAs). */
+  protected upgrading = signal(false);
 
   protected c = signal<LandingContent | null>(null);
   protected notes = signal<Note[]>([]);
@@ -63,9 +71,12 @@ export class LandingComponent {
   /** Scroll duration for the marquee track, from the admin's speed choice. */
   protected marqueeDuration = computed(() => {
     switch (this.c()?.marquee?.speed) {
-      case 'slow': return '48s';
-      case 'fast': return '18s';
-      default: return '32s';
+      case 'slow':
+        return '48s';
+      case 'fast':
+        return '18s';
+      default:
+        return '32s';
     }
   });
   protected openFaq = signal<number | null>(0);
@@ -73,6 +84,7 @@ export class LandingComponent {
   protected isLoggedIn = this.auth.isLoggedIn;
   protected isAdmin = this.auth.isAdmin;
   protected canSell = this.auth.canSell;
+  protected isVerified = this.auth.isVerified;
   protected user = this.auth.user;
   protected readonly examLabel = examLabel;
 
@@ -189,6 +201,32 @@ export class LandingComponent {
     this.auth.logout();
   }
 
+  /**
+   * Buyer → seller upgrade from the landing CTAs. Re-issues the JWT with the
+   * SELLER role, then drops the user into qualifications (where they verify email
+   * if needed, accept the Seller Agreement, take the test, and upload a marksheet).
+   */
+  protected async becomeSeller() {
+    if (this.upgrading()) return;
+    // Accepting the Seller Agreement is a precondition of becoming a seller.
+    const accepted = await this.consent.require('SELLER_AGREEMENT');
+    if (!accepted) return;
+    this.upgrading.set(true);
+    this.auth
+      .becomeSeller()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.upgrading.set(false);
+          this.router.navigate(['/seller/qualifications']);
+        },
+        error: () => {
+          this.upgrading.set(false);
+          this.toast.error('Could not start seller setup. Please try again.');
+        },
+      });
+  }
+
   /** Smooth-scroll an in-page section to the centre of the viewport. */
   protected scrollTo(id: string, e: Event) {
     e.preventDefault();
@@ -208,9 +246,9 @@ export class LandingComponent {
     return !!link && /^(https?:)?\/\//i.test(link.trim());
   }
 
-  /** "Become a seller" → pre-select the Seller role on the signup wizard. */
+  /** "Become a seller" → signup with seller intent (upgraded to seller after signup). */
   protected regSellerQP(link?: string): Record<string, string> {
-    return (link || '/register').startsWith('/register') ? { role: 'seller' } : {};
+    return (link || '/register').startsWith('/register') ? { intent: 'sell' } : {};
   }
 
   /** Highlighter swipe behind the hero's coloured word; null keeps the brand-yellow default. */

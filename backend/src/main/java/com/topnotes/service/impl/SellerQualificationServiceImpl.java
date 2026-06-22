@@ -6,11 +6,13 @@ import com.topnotes.dto.response.SellerTestResponse;
 import com.topnotes.dto.response.TestQuestionSellerResponse;
 import com.topnotes.dto.response.TestResultResponse;
 import com.topnotes.entity.*;
+import com.topnotes.entity.enums.AgreementType;
 import com.topnotes.entity.enums.NotificationType;
 import com.topnotes.entity.enums.QualificationStatus;
 import com.topnotes.exception.BadRequestException;
 import com.topnotes.exception.ResourceNotFoundException;
 import com.topnotes.repository.*;
+import com.topnotes.service.ConsentService;
 import com.topnotes.service.NotificationService;
 import com.topnotes.service.SellerQualificationService;
 import com.topnotes.util.FileUploadUtil;
@@ -38,6 +40,7 @@ public class SellerQualificationServiceImpl implements SellerQualificationServic
     private final NoteRepository               noteRepository;
     private final FileUploadUtil               fileUploadUtil;
     private final NotificationService          notificationService;
+    private final ConsentService               consentService;
 
     public SellerQualificationServiceImpl(UserRepository userRepository,
                                           ExamCategoryRepository categoryRepository,
@@ -47,7 +50,8 @@ public class SellerQualificationServiceImpl implements SellerQualificationServic
                                           SellerQualificationRepository qualRepository,
                                           NoteRepository noteRepository,
                                           FileUploadUtil fileUploadUtil,
-                                          NotificationService notificationService) {
+                                          NotificationService notificationService,
+                                          ConsentService consentService) {
         this.userRepository      = userRepository;
         this.categoryRepository  = categoryRepository;
         this.configRepository    = configRepository;
@@ -57,6 +61,7 @@ public class SellerQualificationServiceImpl implements SellerQualificationServic
         this.noteRepository      = noteRepository;
         this.fileUploadUtil      = fileUploadUtil;
         this.notificationService = notificationService;
+        this.consentService      = consentService;
     }
 
     // ── Seller: overview ──────────────────────────────────────
@@ -99,6 +104,9 @@ public class SellerQualificationServiceImpl implements SellerQualificationServic
     @Override
     @Transactional(readOnly = true)
     public SellerTestResponse startTest(Long sellerId, Long categoryId) {
+        requireVerifiedEmail(sellerId);
+        requireSellerAgreement(sellerId);
+        requireSingleDomain(sellerId, categoryId);
         ExamCategory cat = fetchCategory(categoryId);
         TestConfig cfg = resolveConfig(categoryId);
         if (cfg == null || !Boolean.TRUE.equals(cfg.getIsActive())) {
@@ -147,6 +155,9 @@ public class SellerQualificationServiceImpl implements SellerQualificationServic
     @Transactional
     public TestResultResponse submitTest(Long sellerId, Long categoryId, Map<Long, String> answers) {
         User seller = fetchSeller(sellerId);
+        requireVerifiedEmail(seller);
+        requireSellerAgreement(sellerId);
+        requireSingleDomain(sellerId, categoryId);
         ExamCategory cat = fetchCategory(categoryId);
         TestConfig cfg = resolveConfig(categoryId);
         if (cfg == null || !Boolean.TRUE.equals(cfg.getIsActive())) {
@@ -212,8 +223,11 @@ public class SellerQualificationServiceImpl implements SellerQualificationServic
 
     @Override
     @Transactional
-    public String uploadMarksheet(Long sellerId, Long categoryId, MultipartFile marksheet) {
+    public String uploadMarksheet(Long sellerId, Long categoryId, MultipartFile marksheet, String institution) {
         ExamCategory cat = fetchCategory(categoryId);
+        if (institution == null || institution.trim().length() < 2) {
+            throw new BadRequestException("Enter your institution name (it should match the one on your marksheet).");
+        }
         SellerQualification q = qualRepository.findBySellerIdAndCategoryId(sellerId, categoryId)
                 .orElseThrow(() -> new BadRequestException("Pass the " + cat.getName() + " test before uploading a marksheet."));
         if (q.getStatus() != QualificationStatus.AWAITING_MARKSHEET && q.getStatus() != QualificationStatus.REJECTED) {
@@ -225,11 +239,16 @@ public class SellerQualificationServiceImpl implements SellerQualificationServic
         } catch (IOException e) {
             throw new BadRequestException("Failed to upload marksheet: " + e.getMessage());
         }
+        // Persist the declared institution so the admin can cross-check it against the marksheet.
+        User seller = q.getSeller();
+        seller.setInstitution(institution.trim());
+        userRepository.save(seller);
+
         q.setMarksheetUrl(url);
         q.setRejectionReason(null);
         q.setStatus(QualificationStatus.PENDING_REVIEW);
         qualRepository.save(q);
-        log.info("Marksheet uploaded for seller {} category {}", sellerId, cat.getName());
+        log.info("Marksheet uploaded for seller {} category {} (institution: {})", sellerId, cat.getName(), institution.trim());
         return "Marksheet uploaded for " + cat.getName() + ". Awaiting admin review.";
     }
 
@@ -304,6 +323,43 @@ public class SellerQualificationServiceImpl implements SellerQualificationServic
     }
     private User fetchSeller(Long id) {
         return userRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Seller", id));
+    }
+    /** Sellers must confirm their email before they can attempt any qualification test. */
+    private void requireVerifiedEmail(Long sellerId) {
+        requireVerifiedEmail(fetchSeller(sellerId));
+    }
+    private void requireVerifiedEmail(User seller) {
+        if (!Boolean.TRUE.equals(seller.getEmailVerified())) {
+            throw new BadRequestException("Please verify your email before taking the qualification test.");
+        }
+    }
+    /** Sellers must accept the current Seller Agreement before any qualification test. */
+    private void requireSellerAgreement(Long sellerId) {
+        if (!consentService.hasAcceptedCurrent(sellerId, AgreementType.SELLER_AGREEMENT)) {
+            throw new BadRequestException("Please accept the Seller Agreement before taking the qualification test.");
+        }
+    }
+
+    /**
+     * A seller belongs to a single domain. Once they've PASSED a category's test
+     * (any status beyond a failed/not-started attempt), every other category is
+     * locked — they cannot start or submit a test elsewhere. Protects the
+     * "verified topper" credibility (no one is Engineering AND Medical AND …).
+     */
+    private static final EnumSet<QualificationStatus> COMMITTED_STATUSES = EnumSet.of(
+            QualificationStatus.AWAITING_MARKSHEET,
+            QualificationStatus.PENDING_REVIEW,
+            QualificationStatus.APPROVED,
+            QualificationStatus.REJECTED);
+
+    private void requireSingleDomain(Long sellerId, Long categoryId) {
+        for (SellerQualification q : qualRepository.findBySellerId(sellerId)) {
+            if (!q.getCategory().getId().equals(categoryId) && COMMITTED_STATUSES.contains(q.getStatus())) {
+                throw new BadRequestException(
+                        "You're already qualifying in " + q.getCategory().getName()
+                                + ". A seller can qualify in one domain only.");
+            }
+        }
     }
     private ExamCategory fetchCategory(Long id) {
         return categoryRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Category", id));

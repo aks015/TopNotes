@@ -50,8 +50,7 @@ export const routes: Routes = [
   },
   {
     path: 'notes/:id',
-    loadComponent: () =>
-      import('@features/buyer/note-detail/note-detail.component').then((m) => m.NoteDetailComponent),
+    loadComponent: () => import('@features/buyer/note-detail/note-detail.component').then((m) => m.NoteDetailComponent),
   },
   {
     path: 'u/:id',
@@ -131,6 +130,13 @@ export const routes: Routes = [
             loadComponent: () =>
               import('@features/admin/verifications/admin-verifications.component').then(
                 (m) => m.AdminVerificationsComponent,
+              ),
+          },
+          {
+            path: 'note-approvals',
+            loadComponent: () =>
+              import('@features/admin/note-approvals/admin-note-approvals.component').then(
+                (m) => m.AdminNoteApprovalsComponent,
               ),
           },
           {

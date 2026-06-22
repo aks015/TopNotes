@@ -24,6 +24,10 @@ frontend/node_modules/
 uploads/
 backend/uploads/
 
+# ─── Local DB dumps / backups (never commit data) ─────
+*.sql.bak
+backend/db-backup-*.sql
+
 # ─── Logs ─────────────────────────────────────────────
 *.log
 npm-debug.log*

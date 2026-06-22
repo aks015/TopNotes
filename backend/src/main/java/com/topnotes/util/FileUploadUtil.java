@@ -21,8 +21,13 @@ public class FileUploadUtil {
     private static final long MAX_PDF_SIZE_BYTES = 50 * 1024 * 1024; // 50MB (matches the upload UI + multipart limit)
     private static final long MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 
+    private static final long MAX_MARKSHEET_SIZE_BYTES = 10 * 1024 * 1024; // 10MB (PDF or image)
+
     private static final List<String> ALLOWED_PDF_TYPES   = List.of("application/pdf");
     private static final List<String> ALLOWED_IMAGE_TYPES = List.of("image/jpeg", "image/png", "image/webp");
+    /** Marksheets may be a photo/scan (image) or a PDF document. */
+    private static final List<String> ALLOWED_MARKSHEET_TYPES =
+            List.of("image/jpeg", "image/png", "image/webp", "application/pdf");
 
     private static final String CLOUDINARY_NOT_CONFIGURED =
             "File storage is not configured. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, "
@@ -60,10 +65,11 @@ public class FileUploadUtil {
         }
     }
 
-    /** Validates and stores a marksheet image to Cloudinary. */
+    /** Validates and stores a marksheet (image OR PDF) to Cloudinary. */
     public String storeMarksheet(MultipartFile file) throws IOException {
-        validateFile(file, ALLOWED_IMAGE_TYPES, MAX_IMAGE_SIZE_BYTES, "marksheet image");
-        return uploadToCloudinary(file, "topnotes/marksheets", "image");
+        validateFile(file, ALLOWED_MARKSHEET_TYPES, MAX_MARKSHEET_SIZE_BYTES, "marksheet (image or PDF)");
+        // "auto" lets Cloudinary handle both images and PDFs from one endpoint.
+        return uploadToCloudinary(file, "topnotes/marksheets", "auto");
     }
 
     /** Validates and stores a profile image to Cloudinary. */

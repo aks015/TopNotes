@@ -44,16 +44,18 @@ public class AuthServiceImpl implements AuthService {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new BadRequestException("Email address is already registered");
         }
-        if (request.getRole() == UserRole.ADMIN) {
-            throw new BadRequestException("Self-registration as ADMIN is not permitted");
-        }
+
+        // Every signup is a BUYER; selling is opted into later via become-seller.
+        // Phone is optional and only persisted when provided.
+        String phone = request.getPhone() == null || request.getPhone().isBlank()
+                ? null : request.getPhone().trim();
 
         User user = User.builder()
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .fullName(request.getFullName())
-                .phone(request.getPhone())
-                .role(request.getRole())
+                .phone(phone)
+                .role(UserRole.BUYER)
                 .build();
 
         User saved = userRepository.save(user);
@@ -199,6 +201,7 @@ public class AuthServiceImpl implements AuthService {
                 .profileImageUrl(user.getProfileImageUrl())
                 .role(user.getRole())
                 .isVerified(user.getIsVerified())
+                .emailVerified(user.getEmailVerified())
                 .createdAt(user.getCreatedAt())
                 .token(accessToken)
                 .refreshToken(refreshToken)

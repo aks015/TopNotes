@@ -76,8 +76,9 @@ public class QualificationController {
     public ResponseEntity<ApiResponse<String>> uploadMarksheet(
             @PathVariable Long categoryId,
             @RequestPart("marksheet") MultipartFile marksheet,
+            @RequestParam(value = "institution", required = false) String institution,
             @AuthenticationPrincipal CustomUserDetails me) {
-        String msg = service.uploadMarksheet(me.getId(), categoryId, marksheet);
+        String msg = service.uploadMarksheet(me.getId(), categoryId, marksheet, institution);
         return ResponseEntity.ok(ApiResponse.success(msg, msg));
     }
 

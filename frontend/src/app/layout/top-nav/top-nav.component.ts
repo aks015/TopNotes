@@ -7,6 +7,7 @@ import { LucideAngularModule } from 'lucide-angular';
 import { ApiService } from '@core/services/api.service';
 import { AuthService } from '@core/services/auth.service';
 import { ToastService } from '@core/services/toast.service';
+import { ConsentDialogService } from '@core/services/consent-dialog.service';
 import { AppNotification } from '@core/models';
 import { LogoComponent } from '@ui/logo/logo.component';
 
@@ -37,19 +38,26 @@ type Menu = 'seller' | 'admin' | 'account' | 'notif' | null;
             <a class="tn-link" routerLink="/my-purchases" routerLinkActive="active">My Purchases</a>
           }
           @if (auth.canSell()) {
-            <div class="tn-drop">
-              <button class="tn-link tn-trig" [class.open]="menu() === 'seller'" (click)="toggle('seller', $event)">
-                Seller <lucide-icon name="chevron-down" [size]="15" [strokeWidth]="2" />
-              </button>
-              @if (menu() === 'seller') {
-                <div class="tn-menu" role="menu">
-                  <a class="tn-item" routerLink="/seller/dashboard">Dashboard</a>
-                  <a class="tn-item" routerLink="/seller/upload">Upload note</a>
-                  <a class="tn-item" routerLink="/seller/notes">My Notes</a>
-                  <a class="tn-item" routerLink="/seller/qualifications">Qualifications</a>
-                </div>
-              }
-            </div>
+            @if (auth.isVerified()) {
+              <div class="tn-drop">
+                <button class="tn-link tn-trig" [class.open]="menu() === 'seller'" (click)="toggle('seller', $event)">
+                  Seller <lucide-icon name="chevron-down" [size]="15" [strokeWidth]="2" />
+                </button>
+                @if (menu() === 'seller') {
+                  <div class="tn-menu" role="menu">
+                    <a class="tn-item" routerLink="/seller/dashboard">Dashboard</a>
+                    <a class="tn-item" routerLink="/seller/upload">Upload note</a>
+                    <a class="tn-item" routerLink="/seller/notes">My Notes</a>
+                    <a class="tn-item" routerLink="/seller/qualifications">Qualifications</a>
+                  </div>
+                }
+              </div>
+            } @else {
+              <!-- Not yet qualified in any category → drive them to get verified. -->
+              <a class="tn-link tn-getverified" routerLink="/seller/qualifications" routerLinkActive="active">
+                Get verified
+              </a>
+            }
           }
           @if (auth.isAdmin()) {
             <div class="tn-drop">
@@ -61,6 +69,7 @@ type Menu = 'seller' | 'admin' | 'account' | 'notif' | null;
                   <a class="tn-item" routerLink="/admin/dashboard">Dashboard</a>
                   <a class="tn-item" routerLink="/admin/users">Users</a>
                   <a class="tn-item" routerLink="/admin/verifications">Verifications</a>
+                  <a class="tn-item" routerLink="/admin/note-approvals">Note approvals</a>
                   <a class="tn-item" routerLink="/admin/test">Test Manager</a>
                   <a class="tn-item" routerLink="/admin/taxonomy">Exam Taxonomy</a>
                   <a class="tn-item" routerLink="/admin/payouts">Payouts</a>
@@ -110,7 +119,13 @@ type Menu = 'seller' | 'admin' | 'account' | 'notif' | null;
                   } @else {
                     <div class="tn-notif-list">
                       @for (n of notifications(); track n.id) {
-                        <button type="button" class="tn-notif-row" [class.unread]="!n.isRead" [class.clickable]="!!notifLink(n.type)" (click)="openNotif(n)">
+                        <button
+                          type="button"
+                          class="tn-notif-row"
+                          [class.unread]="!n.isRead"
+                          [class.clickable]="!!notifLink(n.type)"
+                          (click)="openNotif(n)"
+                        >
                           <span class="tn-notif-ic" [class]="'k-' + n.type.toLowerCase()">
                             <lucide-icon [name]="notifIcon(n.type)" [size]="16" [strokeWidth]="2" />
                           </span>
@@ -121,7 +136,9 @@ type Menu = 'seller' | 'admin' | 'account' | 'notif' | null;
                             </span>
                             <span class="tn-notif-msg">{{ n.message }}</span>
                           </span>
-                          @if (!n.isRead) { <span class="tn-notif-unread" aria-label="Unread"></span> }
+                          @if (!n.isRead) {
+                            <span class="tn-notif-unread" aria-label="Unread"></span>
+                          }
                         </button>
                       }
                     </div>
@@ -154,10 +171,14 @@ type Menu = 'seller' | 'admin' | 'account' | 'notif' | null;
                       <a class="tn-item" routerLink="/my-purchases">My Purchases</a>
                     }
                     @if (auth.canSell()) {
-                      <a class="tn-item" routerLink="/seller/dashboard">Seller dashboard</a>
-                      <a class="tn-item" routerLink="/seller/upload">Upload note</a>
-                      <a class="tn-item" routerLink="/seller/notes">My Notes</a>
-                      <a class="tn-item" routerLink="/seller/qualifications">Qualifications</a>
+                      @if (auth.isVerified()) {
+                        <a class="tn-item" routerLink="/seller/dashboard">Seller dashboard</a>
+                        <a class="tn-item" routerLink="/seller/upload">Upload note</a>
+                        <a class="tn-item" routerLink="/seller/notes">My Notes</a>
+                        <a class="tn-item" routerLink="/seller/qualifications">Qualifications</a>
+                      } @else {
+                        <a class="tn-item" routerLink="/seller/qualifications">Get verified</a>
+                      }
                     }
                     @if (auth.isAdmin()) {
                       <a class="tn-item" routerLink="/admin/dashboard">Admin console</a>
@@ -182,6 +203,16 @@ type Menu = 'seller' | 'admin' | 'account' | 'notif' | null;
         </div>
       </div>
     </header>
+
+    @if (auth.isLoggedIn() && !auth.emailVerified() && !verifyDismissed()) {
+      <div class="tn-verify" role="status">
+        <span class="tn-verify-txt">Verify your email to secure your account.</span>
+        <span class="tn-verify-actions">
+          <a class="tn-verify-cta" routerLink="/account">Verify now</a>
+          <button type="button" class="tn-verify-x" (click)="verifyDismissed.set(true)" aria-label="Dismiss">✕</button>
+        </span>
+      </div>
+    }
   `,
   styles: [
     `
@@ -196,6 +227,52 @@ type Menu = 'seller' | 'admin' | 'account' | 'notif' | null;
       /* Floating pill header — detached from the top/side edges. */
       .tn {
         padding: 14px 20px 0;
+      }
+      /* Unverified-email nudge, sits just under the floating nav. */
+      .tn-verify {
+        max-width: 1400px;
+        margin: 10px auto 0;
+        padding: 9px 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        background: #fff7ed;
+        border: 1px solid #fed7aa;
+        border-radius: 12px;
+        font-size: 13.5px;
+        font-weight: 600;
+        color: #9a3412;
+      }
+      .tn-verify-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-shrink: 0;
+      }
+      .tn-verify-cta {
+        text-decoration: none;
+        font-weight: 700;
+        color: #9a3412;
+        padding: 5px 12px;
+        border-radius: 99px;
+        background: #ffedd5;
+      }
+      .tn-verify-cta:hover {
+        background: #fed7aa;
+      }
+      .tn-verify-x {
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: #9a3412;
+        font-size: 15px;
+        line-height: 1;
+        padding: 4px 6px;
+        border-radius: 6px;
+      }
+      .tn-verify-x:hover {
+        background: #ffedd5;
       }
       .tn-inner {
         max-width: 1400px;
@@ -251,6 +328,15 @@ type Menu = 'seller' | 'admin' | 'account' | 'notif' | null;
       .tn-trig.open {
         background: #f0ede2;
         color: #16141e;
+      }
+      /* "Get verified" CTA shown until a seller qualifies in any category. */
+      .tn-getverified {
+        color: #5840e0;
+        font-weight: 700;
+      }
+      .tn-getverified:hover {
+        background: #efebff;
+        color: #5840e0;
       }
       .tn-drop {
         position: relative;
@@ -593,6 +679,10 @@ type Menu = 'seller' | 'admin' | 'account' | 'notif' | null;
 })
 export class TopNavComponent {
   protected auth = inject(AuthService);
+  private consent = inject(ConsentDialogService);
+
+  /** Dismisses the "verify your email" nudge for the current session. */
+  protected verifyDismissed = signal(false);
   private api = inject(ApiService);
   private toast = inject(ToastService);
   private router = inject(Router);
@@ -697,11 +787,16 @@ export class TopNavComponent {
   /** Lucide icon per notification type. */
   protected notifIcon(type: string): string {
     switch (type) {
-      case 'SALE': return 'shopping-bag';
-      case 'PAYMENT': return 'wallet';
-      case 'VERIFICATION': return 'shield-check';
-      case 'REVIEW': return 'star';
-      default: return 'bell';
+      case 'SALE':
+        return 'shopping-bag';
+      case 'PAYMENT':
+        return 'wallet';
+      case 'VERIFICATION':
+        return 'shield-check';
+      case 'REVIEW':
+        return 'star';
+      default:
+        return 'bell';
     }
   }
   /** Where a notification routes when clicked (role-aware; null = not clickable). */
@@ -709,10 +804,14 @@ export class TopNavComponent {
     const seller = this.auth.canSell();
     switch (type) {
       case 'SALE':
-      case 'PAYMENT': return seller ? '/seller/dashboard' : null;
-      case 'VERIFICATION': return seller ? '/seller/qualifications' : null;
-      case 'REVIEW': return seller ? '/seller/notes' : '/my-purchases';
-      default: return null;
+      case 'PAYMENT':
+        return seller ? '/seller/dashboard' : null;
+      case 'VERIFICATION':
+        return seller ? '/seller/qualifications' : null;
+      case 'REVIEW':
+        return seller ? '/seller/notes' : '/my-purchases';
+      default:
+        return null;
     }
   }
   protected openNotif(n: AppNotification) {
@@ -741,8 +840,11 @@ export class TopNavComponent {
   }
 
   // ── Become a seller ─────────────────────────────────────────
-  protected becomeSeller() {
+  protected async becomeSeller() {
     if (this.upgrading()) return;
+    // Accepting the Seller Agreement is a precondition of becoming a seller.
+    const accepted = await this.consent.require('SELLER_AGREEMENT');
+    if (!accepted) return;
     this.upgrading.set(true);
     this.auth
       .becomeSeller()
@@ -751,8 +853,8 @@ export class TopNavComponent {
         next: () => {
           this.upgrading.set(false);
           this.menu.set(null);
-          this.toast.success('You are now a seller — complete verification to publish notes.');
-          this.router.navigate(['/seller/verification']);
+          this.toast.success('You are now a seller — get qualified to publish notes.');
+          this.router.navigate(['/seller/qualifications']);
         },
         error: () => {
           this.upgrading.set(false);

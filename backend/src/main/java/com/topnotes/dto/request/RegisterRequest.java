@@ -1,11 +1,13 @@
 package com.topnotes.dto.request;
 
-import com.topnotes.entity.enums.UserRole;
 import jakarta.validation.constraints.*;
 import lombok.Getter;
 import lombok.Setter;
 
-/** Payload for the /auth/register endpoint. */
+/**
+ * Payload for the /auth/register endpoint. Every signup creates a BUYER account;
+ * selling is opted into later via /profile/become-seller, so no role is accepted here.
+ */
 @Getter
 @Setter
 public class RegisterRequest {
@@ -23,10 +25,10 @@ public class RegisterRequest {
     @Size(min = 8, max = 100, message = "Password must be at least 8 characters")
     private String password;
 
-    @NotBlank(message = "Phone number is required")
-    @Pattern(regexp = "^[6-9]\\d{9}$", message = "Enter a valid 10-digit Indian mobile number")
+    /**
+     * Optional at signup. The {@code ^$} branch lets it be omitted while still
+     * rejecting malformed numbers. Collected later (e.g. payout setup) when needed.
+     */
+    @Pattern(regexp = "^$|^[6-9]\\d{9}$", message = "Enter a valid 10-digit Indian mobile number")
     private String phone;
-
-    @NotNull(message = "Role is required")
-    private UserRole role;
 }

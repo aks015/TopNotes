@@ -23,6 +23,8 @@ export class AuthService {
   readonly isSeller = computed(() => this._user()?.role === 'SELLER');
   readonly isBuyer = computed(() => this._user()?.role === 'BUYER');
   readonly isVerified = computed(() => !!this._user()?.isVerified);
+  /** Whether the signed-in user has confirmed their email via OTP. */
+  readonly emailVerified = computed(() => !!this._user()?.emailVerified);
 
   // ── Capabilities (a user can both buy and sell) ───────────────
   /** Any logged-in non-admin can browse and buy notes. */
@@ -48,7 +50,6 @@ export class AuthService {
     email: string;
     password: string;
     phone?: string;
-    role: string;
   }): Observable<ApiResponse<AuthResponse>> {
     return this.http.post<ApiResponse<AuthResponse>>(`${environment.apiUrl}/auth/register`, body).pipe(
       tap((r) => {
@@ -72,6 +73,24 @@ export class AuthService {
    */
   becomeSeller(): Observable<ApiResponse<AuthResponse>> {
     return this.http.post<ApiResponse<AuthResponse>>(`${environment.apiUrl}/profile/become-seller`, {}).pipe(
+      tap((r) => {
+        if (r.success) this.persist(r.data);
+      }),
+    );
+  }
+
+  /**
+   * Email verification (OTP). Both endpoints require the caller to be logged in;
+   * the JWT issued at registration is already persisted, so the interceptor
+   * attaches it automatically.
+   */
+  sendEmailOtp(): Observable<ApiResponse<void>> {
+    return this.http.post<ApiResponse<void>>(`${environment.apiUrl}/auth/email/send`, {});
+  }
+
+  /** Verify the 6-digit code; on success the refreshed session (emailVerified=true) is persisted. */
+  verifyEmailOtp(code: string): Observable<ApiResponse<AuthResponse>> {
+    return this.http.post<ApiResponse<AuthResponse>>(`${environment.apiUrl}/auth/email/verify`, { code }).pipe(
       tap((r) => {
         if (r.success) this.persist(r.data);
       }),
