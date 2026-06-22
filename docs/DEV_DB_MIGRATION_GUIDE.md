@@ -44,21 +44,20 @@ docker run -d --name topnotes-backend --network topnotes-net -p 8080:8080 --env-
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/api/health   # → 200
 ```
 
-## 4. ⚠️ REQUIRED — fix the `notes.status` enum
-Hibernate created `notes.status` as a MySQL `ENUM('ACTIVE','INACTIVE','DELETED')`
-and **does not add new values to an existing enum**. Without this, publishing a note
-fails with *"Data truncated for column 'status'"*. Run once:
+## 4. ⚠️ REQUIRED — run the explicit MySQL migration
+Don't rely on Hibernate auto-DDL — it can't add values to an existing `ENUM`
+(`notes.status`) and on some setups it skips adding `users.email_verified`, which
+then throws **"Unknown column 'email_verified'"** on *every* user query (login, etc.).
+
+Run the one idempotent script — it adds `users.email_verified`, creates the new
+tables if missing, and widens `notes.status`:
 ```bash
-docker exec topnotes-mysql mysql -uroot -proot topnotes_db -e \
-"ALTER TABLE notes MODIFY COLUMN status ENUM('PENDING_REVIEW','REJECTED','ACTIVE','INACTIVE','DELETED') NOT NULL;"
+docker exec -i topnotes-mysql mysql -uroot -proot topnotes_db < docs/DEV_DB_MIGRATION_MYSQL.sql
 ```
-Verify:
-```bash
-docker exec topnotes-mysql mysql -uroot -proot topnotes_db -e "SHOW COLUMNS FROM notes LIKE 'status';"
-# type should list all 5 values
-```
-> If your DB is **brand new** (the `notes` table didn't exist before this branch),
-> skip this — Hibernate already created it with all 5 values.
+It prints a sanity check at the end (`email_verified present = 1`, and the 5-value
+`status` enum). Safe to run multiple times.
+
+> Restart the backend after running it if it was already up.
 
 ## 5. (Optional) Grandfather existing users as email-verified
 New `users.email_verified` defaults to `0`, so existing accounts show "unverified".
