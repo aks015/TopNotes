@@ -63,6 +63,9 @@ public interface NoteService {
     /** Soft-delete — sets status to DELETED. */
     void deleteNote(Long noteId, Long sellerId);
 
+    /** Hard-delete a trashed, never-sold note (own notes only). Blocked if it has buyers. */
+    void permanentlyDeleteNote(Long noteId, Long sellerId);
+
     /** Available filter options for the browse dropdowns. */
     Map<String, List<String>> getFilterOptions();
 

@@ -18,6 +18,9 @@ public interface NoteRepository extends JpaRepository<Note, Long> {
 
     Page<Note> findByStatus(NoteStatus status, Pageable pageable);
 
+    /** Admin review queue — oldest first (FIFO / fairness). */
+    Page<Note> findByStatusOrderByCreatedAtAsc(NoteStatus status, Pageable pageable);
+
     Page<Note> findBySellerIdAndStatusNot(Long sellerId, NoteStatus status, Pageable pageable);
 
     Page<Note> findBySellerId(Long sellerId, Pageable pageable);
@@ -46,6 +49,9 @@ public interface NoteRepository extends JpaRepository<Note, Long> {
     List<Note> findBySellerIdAndStatusOrderBySubjectAscCreatedAtDesc(Long sellerId, NoteStatus status);
 
     long countBySellerIdAndStatus(Long sellerId, NoteStatus status);
+
+    /** How many of a seller's notes have ever been admin-approved (trust signal). */
+    long countBySellerIdAndApprovedTrue(Long sellerId);
 
     /** Distinct categories a seller has ACTIVE notes in (the domains shown on their public profile). */
     @Query("SELECT DISTINCT n.category FROM Note n WHERE n.seller.id = :sellerId AND n.status = 'ACTIVE' AND n.category IS NOT NULL ORDER BY n.category")

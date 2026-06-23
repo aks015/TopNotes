@@ -23,5 +23,11 @@ public record PendingNoteResponse(
         Long sellerId,
         String sellerName,
         String sellerEmail,
-        LocalDateTime createdAt) {
+        LocalDateTime createdAt,
+        // ── Decision-support for the reviewer ──
+        boolean originalityDeclared,
+        LocalDateTime originalityDeclaredAt,
+        long sellerApprovedCount,
+        long sellerRejectedCount,
+        String sellerQualifiedCategory) {
 }

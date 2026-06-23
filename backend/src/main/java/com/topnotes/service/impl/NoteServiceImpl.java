@@ -342,6 +342,11 @@ public class NoteServiceImpl implements NoteService {
             // where a clone / hidden / edited note could be made live without review.
             note.setStatus(note.isApproved() ? NoteStatus.ACTIVE : NoteStatus.PENDING_REVIEW);
         } else {
+            // Only a LIVE note can be hidden — never pull a pending/rejected note out of
+            // review into a "hidden + unapproved" limbo.
+            if (note.getStatus() != NoteStatus.ACTIVE) {
+                throw new BadRequestException("Only a live note can be hidden.");
+            }
             note.setStatus(NoteStatus.INACTIVE);
         }
         log.info("Note id={} visibility set to {} by seller id={} (approved={})",
@@ -431,6 +436,24 @@ public class NoteServiceImpl implements NoteService {
         note.setStatus(NoteStatus.DELETED);
         noteRepository.save(note);
         log.info("Note id={} soft-deleted by seller id={}", noteId, sellerId);
+    }
+
+    @Override
+    @Transactional
+    public void permanentlyDeleteNote(Long noteId, Long sellerId) {
+        // Trash-only fetch (fetchSellerOwnedNote excludes DELETED notes).
+        Note note = noteRepository.findById(noteId)
+                .filter(n -> n.getSeller().getId().equals(sellerId))
+                .orElseThrow(() -> new ResourceNotFoundException("Note", noteId));
+        if (note.getStatus() != NoteStatus.DELETED) {
+            throw new BadRequestException("Move the note to Trash before deleting it permanently.");
+        }
+        // Never hard-delete a sold note — buyers must keep access to what they paid for.
+        if (note.getPurchaseCount() != null && note.getPurchaseCount() > 0) {
+            throw new BadRequestException("This note has buyers and can't be permanently deleted — they would lose access.");
+        }
+        noteRepository.delete(note);
+        log.info("Note id={} permanently deleted by seller id={}", noteId, sellerId);
     }
 
     /** Reads the page count from an uploaded PDF; 0 if it can't be parsed (non-fatal). */
