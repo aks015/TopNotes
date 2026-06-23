@@ -303,6 +303,18 @@ public class NoteController {
         return ResponseEntity.ok(ApiResponse.success("Note deleted successfully"));
     }
 
+    @DeleteMapping("/{id}/permanent")
+    @PreAuthorize("hasRole('SELLER')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Permanently delete a trashed note (SELLER — own, unsold notes only)")
+    public ResponseEntity<ApiResponse<Void>> permanentlyDeleteNote(
+            @PathVariable Long id,
+            @AuthenticationPrincipal CustomUserDetails principal) {
+
+        noteService.permanentlyDeleteNote(id, principal.getId());
+        return ResponseEntity.ok(ApiResponse.success("Note permanently deleted"));
+    }
+
     // ── Private: Secure PDF response builder ──────────────────
 
     /**

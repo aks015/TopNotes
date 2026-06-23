@@ -7,7 +7,7 @@ import { forkJoin } from 'rxjs';
 import { ApiService } from '@core/services/api.service';
 import { ToastService } from '@core/services/toast.service';
 import { ConfirmService } from '@core/services/confirm.service';
-import { Note } from '@core/models';
+import { Note, Review } from '@core/models';
 import { IllustrationComponent } from '@ui/illustration/illustration.component';
 import { rupee, subjectGradientFlat } from '@shared/util/note-display';
 
@@ -42,7 +42,9 @@ import { rupee, subjectGradientFlat } from '@shared/util/note-display';
         <button class="mn-tab" [class.on]="view() === 'catalogue'" (click)="setView('catalogue')">
           Catalogue <span class="mn-tab-n">{{ total() }}</span>
         </button>
-        <button class="mn-tab" [class.on]="view() === 'trash'" (click)="setView('trash')">Trash</button>
+        <button class="mn-tab" [class.on]="view() === 'trash'" (click)="setView('trash')">
+          Trash @if (trash().length) { <span class="mn-tab-n">{{ trash().length }}</span> }
+        </button>
       </div>
 
       @if (view() === 'catalogue') {
@@ -93,6 +95,33 @@ import { rupee, subjectGradientFlat } from '@shared/util/note-display';
             <a class="mn-btn primary" routerLink="/seller/upload">Upload a note</a>
           </div>
         } @else {
+          <!-- Performance summary -->
+          <div class="mn-kpis">
+            <div class="mn-kpi">
+              <span class="mn-kpi-v">{{ kpis().live }}</span><span class="mn-kpi-l">Live</span>
+            </div>
+            <div class="mn-kpi">
+              <span class="mn-kpi-v">{{ kpis().review }}</span><span class="mn-kpi-l">In review</span>
+            </div>
+            <div class="mn-kpi">
+              <span class="mn-kpi-v">{{ kpis().hidden }}</span><span class="mn-kpi-l">Hidden</span>
+            </div>
+            <div class="mn-kpi-sep"></div>
+            <div class="mn-kpi">
+              <span class="mn-kpi-v">{{ kpis().sales }}</span><span class="mn-kpi-l">Sales</span>
+            </div>
+            <div class="mn-kpi">
+              <span class="mn-kpi-v">{{ rupee(kpis().revenue) }}</span><span class="mn-kpi-l">Revenue</span>
+            </div>
+            <div class="mn-kpi">
+              <span class="mn-kpi-v">{{ kpis().views }}</span><span class="mn-kpi-l">Views</span>
+            </div>
+            <div class="mn-kpi">
+              <span class="mn-kpi-v">{{ kpis().hasRating ? '★ ' + kpis().avgRating.toFixed(1) : '—' }}</span>
+              <span class="mn-kpi-l">Avg rating</span>
+            </div>
+          </div>
+
           <!-- Needs-attention strip -->
           @if (pendingCount() || rejectedCount()) {
             <div class="mn-attention">
@@ -127,7 +156,14 @@ import { rupee, subjectGradientFlat } from '@shared/util/note-display';
               <button class="mn-btn outline sm" [disabled]="bulkBusy()" (click)="bulkVisibility(true)">
                 Publish / Submit
               </button>
-              <button class="mn-btn outline sm" [disabled]="bulkBusy()" (click)="bulkVisibility(false)">Hide</button>
+              <button
+                class="mn-btn outline sm"
+                [disabled]="bulkBusy() || !hasLiveSelected()"
+                [title]="hasLiveSelected() ? '' : 'Select a live note to hide'"
+                (click)="bulkVisibility(false)"
+              >
+                Hide
+              </button>
               <button class="mn-btn danger sm" [disabled]="bulkBusy()" (click)="bulkDelete()">Delete</button>
               <button class="mn-btn ghost sm" (click)="clearSel()">Clear</button>
             </div>
@@ -196,20 +232,22 @@ import { rupee, subjectGradientFlat } from '@shared/util/note-display';
                       ><b>{{ n.viewCount || 0 }}</b> views</span
                     >
                     <span class="mn-dot">·</span>
-                    <span>{{ conversion(n) }} conv.</span>
+                    <span title="Conversion = sales ÷ views">{{ conversion(n) }} conv.</span>
                     <span class="mn-dot">·</span>
                     <span
                       ><b>{{ rupee(n.revenue || 0) }}</b> earned</span
                     >
                     <span class="mn-dot">·</span>
-                    <span>{{ n.reviewCount ? '★ ' + (n.averageRating || 0).toFixed(1) : 'New' }}</span>
+                    <span [title]="n.reviewCount ? n.reviewCount + ' reviews' : 'No reviews yet'">{{
+                      n.reviewCount ? '★ ' + (n.averageRating || 0).toFixed(1) : 'New'
+                    }}</span>
                     @if (n.lastSoldAt) {
                       <span class="mn-dot">·</span><span>last sold {{ n.lastSoldAt | date: 'd MMM' }}</span>
                     }
                   </div>
                 </div>
 
-                <div class="mn-right">
+                <div class="mn-trendcol">
                   @if (hasTrend(n)) {
                     <svg class="mn-spark" viewBox="0 0 88 22" preserveAspectRatio="none" aria-label="30-day sales">
                       <polyline
@@ -220,9 +258,13 @@ import { rupee, subjectGradientFlat } from '@shared/util/note-display';
                         stroke-linejoin="round"
                       />
                     </svg>
+                    <span class="mn-trend-l">30-day sales</span>
                   } @else {
                     <span class="mn-spark-empty">no sales yet</span>
                   }
+                </div>
+
+                <div class="mn-right">
                   <div class="mn-price">
                     <span>₹</span>
                     <input
@@ -244,20 +286,26 @@ import { rupee, subjectGradientFlat } from '@shared/util/note-display';
                   </div>
                   <div class="mn-buttons">
                     @if (n.status === 'PENDING_REVIEW') {
-                      <button
-                        class="mn-btn outline sm"
-                        disabled
-                        title="Editing is locked while this note is awaiting admin review"
-                      >
-                        Edit
-                      </button>
+                      <span class="mn-locked" title="Locked while awaiting admin review">🔒 Locked in review</span>
                     } @else {
-                      <a class="mn-btn outline sm" [routerLink]="['/seller/notes', n.id, 'edit']">Edit</a>
+                      <a
+                        class="mn-btn outline sm"
+                        [class.warn]="n.status === 'REJECTED'"
+                        [routerLink]="['/seller/notes', n.id, 'edit']"
+                      >
+                        {{ n.status === 'REJECTED' ? 'Fix & resubmit' : 'Edit' }}
+                      </a>
                     }
                     @if (n.status === 'ACTIVE' || n.status === 'INACTIVE') {
                       <button class="mn-btn outline sm" [disabled]="busyId() === n.id" (click)="toggleVisibility(n)">
-                        {{ n.status === 'ACTIVE' ? 'Hide' : 'Publish' }}
+                        {{ n.status === 'ACTIVE' ? 'Hide' : 'Unhide' }}
                       </button>
+                    }
+                    @if (n.status === 'ACTIVE') {
+                      <button class="mn-btn outline sm" (click)="copyLink(n)">Copy link</button>
+                    }
+                    @if (n.reviewCount) {
+                      <button class="mn-btn outline sm" (click)="openReviews(n)">Reviews ({{ n.reviewCount }})</button>
                     }
                     <button class="mn-btn danger sm" [disabled]="busyId() === n.id" (click)="remove(n)">Delete</button>
                   </div>
@@ -290,11 +338,29 @@ import { rupee, subjectGradientFlat } from '@shared/util/note-display';
             <p>Deleted notes appear here and can be restored.</p>
           </div>
         } @else {
+          <div class="mn-trash-bar">
+            <span
+              ><b>{{ trash().length }}</b> in Trash</span
+            >
+            @if (trashEligibleCount()) {
+              <button class="mn-btn danger sm" [disabled]="bulkBusy()" (click)="emptyTrash()">
+                Empty Trash ({{ trashEligibleCount() }})
+              </button>
+            }
+          </div>
           <div class="mn-card">
             @for (n of trash(); track n.id) {
-              <div class="mn-row">
-                <div class="mn-cover" [style.background]="cover(n)">
-                  <span>{{ glyph(n) }}</span>
+              <div class="mn-row trash">
+                <div
+                  class="mn-cover"
+                  [class.img]="n.thumbnailUrl"
+                  [style.background]="n.thumbnailUrl ? null : cover(n)"
+                >
+                  @if (n.thumbnailUrl) {
+                    <img [src]="n.thumbnailUrl" [alt]="n.title" loading="lazy" />
+                  } @else {
+                    <span>{{ glyph(n) }}</span>
+                  }
                 </div>
                 <div class="mn-main">
                   <div class="mn-row-title">{{ n.title }}</div>
@@ -305,17 +371,68 @@ import { rupee, subjectGradientFlat } from '@shared/util/note-display';
                     @if (n.subject) {
                       <span class="mn-dot">·</span><span>{{ n.subject }}</span>
                     }
+                    <span class="mn-dot">·</span><span>{{ rupee(n.price || 0) }}</span>
+                    @if (n.purchaseCount) {
+                      <span class="mn-dot">·</span
+                      ><span
+                        ><b>{{ n.purchaseCount }}</b> sales</span
+                      >
+                    }
                     <span class="mn-pill del">Deleted</span>
                   </div>
                 </div>
-                <div class="mn-right">
+                <div class="mn-right mn-trash-actions">
                   <button class="mn-btn primary sm" [disabled]="busyId() === n.id" (click)="restore(n)">Restore</button>
+                  <button
+                    class="mn-btn danger sm"
+                    [disabled]="busyId() === n.id || !!n.purchaseCount"
+                    [title]="n.purchaseCount ? 'Has buyers — cannot be permanently deleted' : 'Delete permanently'"
+                    (click)="destroy(n)"
+                  >
+                    Delete forever
+                  </button>
                 </div>
               </div>
             }
           </div>
-          <p class="mn-trash-note">Restored notes return as <b>Hidden</b> — publish them again from your catalogue.</p>
+          <p class="mn-trash-note">
+            Restored notes return as <b>Hidden</b> — publish them again from your catalogue.
+            <b>Delete forever</b> can't be undone, and notes with buyers can't be permanently deleted.
+          </p>
         }
+      }
+
+      @if (reviewsNote(); as rn) {
+        <div class="mn-scrim" (click)="reviewsNote.set(null)">
+          <div class="mn-modal" (click)="$event.stopPropagation()">
+            <div class="mn-modal-head">
+              <h3>Reviews · {{ rn.title }}</h3>
+              <button class="mn-modal-x" (click)="reviewsNote.set(null)" aria-label="Close">✕</button>
+            </div>
+            @if (reviewsLoading()) {
+              <p class="mn-modal-muted">Loading…</p>
+            } @else if (!reviewsList().length) {
+              <p class="mn-modal-muted">No reviews yet.</p>
+            } @else {
+              <div class="mn-reviews">
+                @for (r of reviewsList(); track r.id) {
+                  <div class="mn-review">
+                    <div class="mn-review-top">
+                      <b>{{ r.buyerName || 'Anonymous' }}</b>
+                      <span class="mn-review-stars">{{ stars(r.rating) }}</span>
+                      @if (r.createdAt) {
+                        <span class="mn-review-date">{{ r.createdAt | date: 'd MMM y' }}</span>
+                      }
+                    </div>
+                    @if (r.comment) {
+                      <p class="mn-review-text">{{ r.comment }}</p>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        </div>
       }
     </div>
   `,
@@ -458,7 +575,7 @@ import { rupee, subjectGradientFlat } from '@shared/util/note-display';
 
       .mn-row {
         display: grid;
-        grid-template-columns: auto 56px 1fr auto;
+        grid-template-columns: auto 56px 1fr auto auto;
         gap: 14px;
         align-items: center;
         padding: 16px 18px;
@@ -648,6 +765,50 @@ import { rupee, subjectGradientFlat } from '@shared/util/note-display';
         font-weight: 800;
       }
 
+      .mn-kpis {
+        display: flex;
+        align-items: stretch;
+        flex-wrap: wrap;
+        gap: 10px 22px;
+        padding: 16px 20px;
+        margin-bottom: 14px;
+        background: #fff;
+        border: 1px solid #f0ede2;
+        border-radius: 16px;
+      }
+      .mn-kpi {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 64px;
+      }
+      .mn-kpi-v {
+        font-family: 'Bricolage Grotesque', system-ui, sans-serif;
+        font-weight: 800;
+        font-size: 20px;
+        color: #16141e;
+        line-height: 1.1;
+      }
+      .mn-kpi-l {
+        font-size: 11.5px;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        color: #8b879a;
+      }
+      .mn-kpi-sep {
+        width: 1px;
+        align-self: stretch;
+        background: #f0ede2;
+      }
+      .mn-trash-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+        font-size: 13.5px;
+        color: #6b6678;
+      }
       .mn-attention {
         display: flex;
         align-items: center;
@@ -716,6 +877,23 @@ import { rupee, subjectGradientFlat } from '@shared/util/note-display';
         flex-direction: column;
         align-items: flex-end;
         gap: 8px;
+      }
+      .mn-trendcol {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        min-width: 92px;
+        padding: 0 8px;
+        border-left: 1px solid #f3f0e6;
+        border-right: 1px solid #f3f0e6;
+      }
+      .mn-trend-l {
+        font-size: 10.5px;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        color: #b3adc4;
       }
       .mn-spark {
         width: 88px;
@@ -873,6 +1051,10 @@ import { rupee, subjectGradientFlat } from '@shared/util/note-display';
         .mn-row {
           grid-template-columns: auto 56px 1fr;
         }
+        /* On narrow screens the trend column would crowd the row — drop it. */
+        .mn-trendcol {
+          display: none;
+        }
         .mn-right {
           grid-column: 1 / -1;
           flex-direction: row;
@@ -882,6 +1064,124 @@ import { rupee, subjectGradientFlat } from '@shared/util/note-display';
           border-top: 1px dashed #f0ede2;
           padding-top: 12px;
         }
+      }
+
+      /* Trash row: 3 children (cover · main · actions) — its own grid so the title
+         isn't squeezed into the catalogue's 56px checkbox column. */
+      .mn-row.trash {
+        grid-template-columns: 56px 1fr auto;
+      }
+      .mn-trash-actions {
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      @media (max-width: 560px) {
+        .mn-trash-actions {
+          flex-wrap: wrap;
+        }
+      }
+      .mn-locked {
+        display: inline-flex;
+        align-items: center;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: #8b879a;
+        padding: 8px 4px;
+      }
+      /* Rejected "Fix & resubmit" accent */
+      .mn-btn.outline.warn {
+        border-color: #f0b4ae;
+        color: #d8453b;
+        font-weight: 700;
+      }
+      .mn-btn.outline.warn:hover {
+        background: #fdeceb;
+      }
+
+      /* Reviews modal */
+      .mn-scrim {
+        position: fixed;
+        inset: 0;
+        background: rgba(22, 20, 30, 0.5);
+        display: grid;
+        place-items: center;
+        z-index: 100;
+        padding: 24px;
+      }
+      .mn-modal {
+        background: #fff;
+        border-radius: 18px;
+        padding: 22px 24px;
+        width: min(520px, 100%);
+        max-height: 80vh;
+        display: flex;
+        flex-direction: column;
+      }
+      .mn-modal-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 14px;
+      }
+      .mn-modal-head h3 {
+        margin: 0;
+        font-family: 'Bricolage Grotesque', system-ui, sans-serif;
+        font-weight: 700;
+        font-size: 18px;
+      }
+      .mn-modal-x {
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 16px;
+        color: #8b879a;
+        padding: 4px 8px;
+        border-radius: 8px;
+      }
+      .mn-modal-x:hover {
+        background: #f0ede4;
+      }
+      .mn-modal-muted {
+        color: #8b879a;
+        font-size: 14px;
+        margin: 8px 0;
+      }
+      .mn-reviews {
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .mn-review {
+        border-bottom: 1px solid #f0ede2;
+        padding-bottom: 12px;
+      }
+      .mn-review:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+      }
+      .mn-review-top {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13.5px;
+      }
+      .mn-review-stars {
+        color: #e8a23d;
+        letter-spacing: 1px;
+      }
+      .mn-review-date {
+        color: #a8a4b8;
+        font-size: 12px;
+        margin-left: auto;
+      }
+      .mn-review-text {
+        margin: 6px 0 0;
+        font-size: 13.5px;
+        line-height: 1.5;
+        color: #3e3b52;
       }
     `,
   ],
@@ -903,6 +1203,11 @@ export class MyNotesComponent {
   private page = signal(0);
   protected total = signal(0);
 
+  // ── Reviews modal ─────────────────────────────────────────
+  protected reviewsNote = signal<Note | null>(null);
+  protected reviewsList = signal<Review[]>([]);
+  protected reviewsLoading = signal(false);
+
   protected query = signal('');
   protected statusFilter = signal('');
   protected sort = signal('newest');
@@ -918,6 +1223,33 @@ export class MyNotesComponent {
 
   protected pendingCount = computed(() => this.notes().filter((n) => n.status === 'PENDING_REVIEW').length);
   protected rejectedCount = computed(() => this.notes().filter((n) => n.status === 'REJECTED').length);
+
+  /** At-a-glance performance summary across the catalogue. */
+  protected kpis = computed(() => {
+    const all = this.notes();
+    const sum = (fn: (n: Note) => number) => all.reduce((s, n) => s + fn(n), 0);
+    const ratingNum = sum((n) => (n.averageRating ?? 0) * (n.reviewCount ?? 0));
+    const ratingDen = sum((n) => n.reviewCount ?? 0);
+    return {
+      live: all.filter((n) => n.status === 'ACTIVE').length,
+      review: all.filter((n) => n.status === 'PENDING_REVIEW').length,
+      hidden: all.filter((n) => n.status === 'INACTIVE').length,
+      sales: sum((n) => n.purchaseCount ?? 0),
+      revenue: sum((n) => n.revenue ?? 0),
+      views: sum((n) => n.viewCount ?? 0),
+      avgRating: ratingDen ? ratingNum / ratingDen : 0,
+      hasRating: ratingDen > 0,
+    };
+  });
+
+  /** Bulk "Hide" only makes sense when at least one selected note is live. */
+  protected hasLiveSelected = computed(() => {
+    const sel = this.selected();
+    return this.notes().some((n) => sel.has(n.id) && n.status === 'ACTIVE');
+  });
+
+  /** Trashed notes that can be hard-deleted (no buyers). */
+  protected trashEligibleCount = computed(() => this.trash().filter((n) => !n.purchaseCount).length);
 
   /** Toggle the status filter from an attention chip (click again to clear). */
   protected toggleAttention(status: string) {
@@ -1026,6 +1358,36 @@ export class MyNotesComponent {
   }
 
   // ── Single-row actions ────────────────────────────────────
+  // ── Share + reviews ───────────────────────────────────────
+  /** Copy the public listing URL so the seller can share it. */
+  protected copyLink(n: Note) {
+    const url = `${location.origin}/notes/${n.id}`;
+    navigator.clipboard?.writeText(url).then(
+      () => this.toast.success('Link copied'),
+      () => this.toast.error(url),
+    );
+  }
+  protected openReviews(n: Note) {
+    this.reviewsNote.set(n);
+    this.reviewsList.set([]);
+    this.reviewsLoading.set(true);
+    this.api
+      .getNoteReviews(n.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (r) => {
+          this.reviewsList.set(r.data?.content ?? []);
+          this.reviewsLoading.set(false);
+        },
+        error: () => this.reviewsLoading.set(false),
+      });
+  }
+  /** "★★★★☆" for a 0–5 rating. */
+  protected stars(rating?: number): string {
+    const n = Math.round(rating || 0);
+    return '★'.repeat(n) + '☆'.repeat(Math.max(0, 5 - n));
+  }
+
   protected savePrice(n: Note, value: string) {
     const price = Number(value);
     if (!price || price === n.price) return;
@@ -1060,10 +1422,65 @@ export class MyNotesComponent {
         error: () => this.busyId.set(null),
       });
   }
-  protected async remove(n: Note) {
+  /** Hard-delete a trashed, never-sold note (irreversible). */
+  protected async destroy(n: Note) {
     const ok = await this.confirm.ask({
-      title: 'Delete note?',
-      message: `"${n.title}" moves to Trash — you can restore it later.`,
+      title: 'Delete permanently?',
+      message: `"${n.title}" will be permanently removed and cannot be recovered.`,
+      confirmText: 'Delete forever',
+      danger: true,
+    });
+    if (!ok) return;
+    this.busyId.set(n.id);
+    this.api
+      .permanentlyDeleteNote(n.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.toast.success('Permanently deleted');
+          this.trash.update((l) => l.filter((x) => x.id !== n.id));
+          this.busyId.set(null);
+        },
+        error: (err) => {
+          this.busyId.set(null);
+          this.toast.error(err?.error?.message ?? 'Could not delete permanently.');
+        },
+      });
+  }
+  /** Permanently delete every trashed note with no buyers (sold notes are kept). */
+  protected async emptyTrash() {
+    const eligible = this.trash().filter((n) => !n.purchaseCount);
+    if (!eligible.length) return;
+    const ok = await this.confirm.ask({
+      title: `Permanently delete ${eligible.length} note${eligible.length > 1 ? 's' : ''}?`,
+      message: 'These trashed notes will be permanently removed and cannot be recovered. Notes with buyers are kept.',
+      confirmText: 'Delete forever',
+      danger: true,
+    });
+    if (!ok) return;
+    this.bulkBusy.set(true);
+    forkJoin(eligible.map((n) => this.api.permanentlyDeleteNote(n.id)))
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          const ids = new Set(eligible.map((n) => n.id));
+          this.trash.update((l) => l.filter((x) => !ids.has(x.id)));
+          this.toast.success(`${eligible.length} permanently deleted`);
+          this.bulkBusy.set(false);
+        },
+        error: (err) => {
+          this.bulkBusy.set(false);
+          this.toast.error(err?.error?.message ?? 'Could not empty Trash.');
+        },
+      });
+  }
+  protected async remove(n: Note) {
+    const pending = n.status === 'PENDING_REVIEW';
+    const ok = await this.confirm.ask({
+      title: pending ? 'Remove from review?' : 'Delete note?',
+      message: pending
+        ? `"${n.title}" will be pulled from the admin review queue and moved to Trash — you can restore it later. This does not affect any payouts.`
+        : `"${n.title}" moves to Trash — you can restore it later.`,
       confirmText: 'Delete',
       danger: true,
     });
@@ -1101,7 +1518,20 @@ export class MyNotesComponent {
 
   // ── Bulk actions ──────────────────────────────────────────
   protected bulkVisibility(active: boolean) {
-    const ids = [...this.selected()];
+    // Remember each note's status before the action so we can word the toast accurately.
+    const prior = new Map(this.notes().map((n) => [n.id, n.status]));
+    let ids = [...this.selected()];
+    // Hiding only applies to LIVE notes — never pull a pending/rejected note out of review.
+    if (!active) {
+      const eligible = ids.filter((id) => prior.get(id) === 'ACTIVE');
+      const skipped = ids.length - eligible.length;
+      if (!eligible.length) {
+        this.toast.error('Only live notes can be hidden.');
+        return;
+      }
+      if (skipped) this.toast.success(`${skipped} not live — skipped`);
+      ids = eligible;
+    }
     if (!ids.length) return;
     this.bulkBusy.set(true);
     forkJoin(ids.map((id) => this.api.setNoteVisibility(id, active)))
@@ -1109,11 +1539,18 @@ export class MyNotesComponent {
       .subscribe({
         next: (results) => {
           if (active) {
-            const live = results.filter((r) => r.data?.status === 'ACTIVE').length;
-            const review = results.length - live;
+            let published = 0;
+            let sent = 0;
+            let already = 0;
+            results.forEach((r, i) => {
+              if (r.data?.status === 'ACTIVE') published++;
+              else if (prior.get(ids[i]) === 'PENDING_REVIEW') already++;
+              else sent++;
+            });
             const parts: string[] = [];
-            if (live) parts.push(`${live} published`);
-            if (review) parts.push(`${review} sent for review`);
+            if (published) parts.push(`${published} published`);
+            if (sent) parts.push(`${sent} sent for review`);
+            if (already) parts.push(`${already} already in review`);
             this.toast.success(parts.join(' · ') || 'Updated');
           } else {
             this.toast.success(`${ids.length} hidden`);

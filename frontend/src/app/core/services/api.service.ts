@@ -104,6 +104,10 @@ export class ApiService {
   deleteNote(id: number): Observable<ApiResponse<void>> {
     return this.http.delete<ApiResponse<void>>(`${this.base}/notes/${id}`);
   }
+  /** Hard-delete a trashed, never-sold note. */
+  permanentlyDeleteNote(id: number): Observable<ApiResponse<void>> {
+    return this.http.delete<ApiResponse<void>>(`${this.base}/notes/${id}/permanent`);
+  }
   cloneNote(id: number): Observable<ApiResponse<Note>> {
     return this.http.post<ApiResponse<Note>>(`${this.base}/notes/${id}/clone`, {});
   }

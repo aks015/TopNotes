@@ -402,6 +402,12 @@ export interface PendingNote {
   sellerName: string;
   sellerEmail: string;
   createdAt?: string;
+  // Decision-support for the reviewer
+  originalityDeclared?: boolean;
+  originalityDeclaredAt?: string;
+  sellerApprovedCount?: number;
+  sellerRejectedCount?: number;
+  sellerQualifiedCategory?: string;
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────
