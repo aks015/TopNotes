@@ -2,19 +2,28 @@ package com.topnotes.service.impl;
 
 import com.topnotes.dto.request.ConfigUpdateRequest;
 import com.topnotes.dto.response.NoteResponse;
+import com.topnotes.dto.response.PendingNoteResponse;
 import com.topnotes.dto.response.UserResponse;
+import com.topnotes.entity.ConsentRecord;
+import com.topnotes.entity.Note;
 import com.topnotes.entity.PlatformConfig;
 import com.topnotes.entity.User;
+import com.topnotes.entity.enums.AgreementType;
 import com.topnotes.entity.enums.NoteStatus;
+import com.topnotes.entity.enums.NotificationType;
+import com.topnotes.entity.enums.QualificationStatus;
 import com.topnotes.entity.enums.UserRole;
 import com.topnotes.entity.enums.UserStatus;
 import com.topnotes.exception.BadRequestException;
 import com.topnotes.exception.ResourceNotFoundException;
+import com.topnotes.repository.ConsentRecordRepository;
 import com.topnotes.repository.NoteRepository;
 import com.topnotes.repository.PlatformConfigRepository;
+import com.topnotes.repository.SellerQualificationRepository;
 import com.topnotes.repository.UserRepository;
 import com.topnotes.service.AdminService;
 import com.topnotes.service.NoteService;
+import com.topnotes.service.NotificationService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -28,19 +37,83 @@ import java.util.stream.Collectors;
 @Slf4j
 public class AdminServiceImpl implements AdminService {
 
-    private final UserRepository           userRepository;
-    private final NoteRepository           noteRepository;
-    private final PlatformConfigRepository configRepository;
-    private final NoteService              noteService;
+    private final UserRepository                userRepository;
+    private final NoteRepository                noteRepository;
+    private final PlatformConfigRepository      configRepository;
+    private final NoteService                   noteService;
+    private final NotificationService           notificationService;
+    private final ConsentRecordRepository       consentRecordRepository;
+    private final SellerQualificationRepository sellerQualificationRepository;
 
     public AdminServiceImpl(UserRepository userRepository,
                             NoteRepository noteRepository,
                             PlatformConfigRepository configRepository,
-                            NoteService noteService) {
+                            NoteService noteService,
+                            NotificationService notificationService,
+                            ConsentRecordRepository consentRecordRepository,
+                            SellerQualificationRepository sellerQualificationRepository) {
         this.userRepository   = userRepository;
         this.noteRepository   = noteRepository;
         this.configRepository = configRepository;
         this.noteService      = noteService;
+        this.notificationService = notificationService;
+        this.consentRecordRepository = consentRecordRepository;
+        this.sellerQualificationRepository = sellerQualificationRepository;
+    }
+
+    // ── Note content review ───────────────────────────────────
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<PendingNoteResponse> getPendingNotes(Pageable pageable) {
+        return noteRepository.findByStatusOrderByCreatedAtAsc(NoteStatus.PENDING_REVIEW, pageable).map(n -> {
+            User s = n.getSeller();
+            var consent = consentRecordRepository
+                    .findFirstByNoteIdAndAgreementType(n.getId(), AgreementType.ORIGINALITY_DECLARATION);
+            String qualifiedCategory = sellerQualificationRepository
+                    .findBySellerIdAndStatus(s.getId(), QualificationStatus.APPROVED).stream()
+                    .findFirst().map(q -> q.getCategory().getName()).orElse(null);
+            return new PendingNoteResponse(n.getId(), n.getTitle(), n.getDescription(),
+                    n.getCategory(), n.getExam(), n.getSubject(), n.getClassLevel(),
+                    n.getPrice(), n.getThumbnailUrl(), n.getPdfUrl(), n.getTotalPages(),
+                    s.getId(), s.getFullName(), s.getEmail(), n.getCreatedAt(),
+                    consent.isPresent(),
+                    consent.map(ConsentRecord::getAcceptedAt).orElse(null),
+                    noteRepository.countBySellerIdAndApprovedTrue(s.getId()),
+                    noteRepository.countBySellerIdAndStatus(s.getId(), NoteStatus.REJECTED),
+                    qualifiedCategory);
+        });
+    }
+
+    @Override
+    @Transactional
+    public void reviewNote(Long noteId, boolean approved, String reason) {
+        Note note = noteRepository.findById(noteId)
+                .orElseThrow(() -> new ResourceNotFoundException("Note", noteId));
+        if (note.getStatus() != NoteStatus.PENDING_REVIEW) {
+            throw new BadRequestException("This note isn't pending review.");
+        }
+        if (!approved && (reason == null || reason.isBlank())) {
+            throw new BadRequestException("A reason is required when rejecting a note.");
+        }
+        note.setStatus(approved ? NoteStatus.ACTIVE : NoteStatus.REJECTED);
+        // Mark the current content as admin-approved so the seller may hide/republish it
+        // later without re-review. Any future content change resets this (see NoteServiceImpl).
+        if (approved) {
+            note.setApproved(true);
+            note.setRejectionReason(null);
+        } else {
+            note.setRejectionReason(reason);
+        }
+        noteRepository.save(note);
+
+        notificationService.createNotification(note.getSeller(),
+                approved ? "Notes approved & live 🎉" : "Notes need changes",
+                approved
+                        ? "Your notes \"" + note.getTitle() + "\" passed review and are now live on TopNotes."
+                        : "Your notes \"" + note.getTitle() + "\" weren't approved. Reason: " + reason,
+                NotificationType.SYSTEM);
+        log.info("Note {} review: approved={}", noteId, approved);
     }
 
     // ── User management ───────────────────────────────────────

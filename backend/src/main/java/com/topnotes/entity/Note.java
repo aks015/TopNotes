@@ -99,6 +99,20 @@ public class Note {
     @Builder.Default
     private NoteStatus status = NoteStatus.ACTIVE;
 
+    /**
+     * True once an admin has approved this note's CURRENT content. It is the only
+     * gate that lets a note go ACTIVE (live). Reset to false whenever the content
+     * changes (PDF swap) or a fresh draft is made (clone), so a seller can never
+     * push unreviewed content live by toggling visibility.
+     */
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean approved = false;
+
+    /** Admin's reason when status = REJECTED — shown to the seller so they know what to fix. Cleared on approval. */
+    @Column(length = 1000)
+    private String rejectionReason;
+
     /** Denormalised counter — incremented on each successful purchase. */
     @Column(nullable = false)
     @Builder.Default

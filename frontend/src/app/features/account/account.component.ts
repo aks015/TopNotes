@@ -9,6 +9,8 @@ import { AuthService } from '@core/services/auth.service';
 import { ToastService } from '@core/services/toast.service';
 import { TopNavComponent } from '@layout/top-nav/top-nav.component';
 import { TextFieldComponent } from '@ui/text-field/text-field.component';
+import { EmailVerifyComponent } from '@ui/email-verify/email-verify.component';
+import { ConsentDialogService } from '@core/services/consent-dialog.service';
 
 interface AdminLink {
   path: string;
@@ -26,7 +28,15 @@ interface AdminLink {
   selector: 'app-account',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, RouterLink, LucideAngularModule, TopNavComponent, DatePipe, TextFieldComponent],
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    LucideAngularModule,
+    TopNavComponent,
+    DatePipe,
+    TextFieldComponent,
+    EmailVerifyComponent,
+  ],
   template: `
     <app-top-nav />
 
@@ -64,7 +74,9 @@ interface AdminLink {
             </label>
             @if (auth.user()?.profileImageUrl) {
               <span class="ac-dot">·</span>
-              <button type="button" class="ac-pic-link danger" (click)="removePic()" [disabled]="uploadingPic()">Remove</button>
+              <button type="button" class="ac-pic-link danger" (click)="removePic()" [disabled]="uploadingPic()">
+                Remove
+              </button>
             }
           </div>
         </div>
@@ -142,7 +154,10 @@ interface AdminLink {
 
       <!-- Profile -->
       <section class="ac-card">
-        <div class="ac-card-h"><h2>Profile</h2><span class="ac-sub">Your name &amp; contact number</span></div>
+        <div class="ac-card-h">
+          <h2>Profile</h2>
+          <span class="ac-sub">Your name &amp; contact number</span>
+        </div>
         <div class="ac-two">
           <app-text-field
             label="Full name"
@@ -162,10 +177,32 @@ interface AdminLink {
             error="Enter a valid 10-digit mobile number."
           />
         </div>
-        <button class="ac-btn primary" (click)="saveProfile()" [disabled]="savingProfile() || pName.invalid || pPhone.invalid">
+        <button
+          class="ac-btn primary"
+          (click)="saveProfile()"
+          [disabled]="savingProfile() || pName.invalid || pPhone.invalid"
+        >
           {{ savingProfile() ? 'Saving…' : 'Save profile' }}
         </button>
       </section>
+
+      <!-- Verify email (until confirmed) -->
+      @if (!auth.emailVerified()) {
+        <section class="ac-card">
+          <div class="ac-card-h">
+            <h2>Verify your email</h2>
+            <span class="ac-chip warn">Not verified</span>
+          </div>
+          <p class="ac-muted">
+            {{
+              auth.canSell()
+                ? 'Confirm your email to secure your account and unlock the seller qualification test.'
+                : 'Confirm your email to secure your account.'
+            }}
+          </p>
+          <app-email-verify [email]="auth.user()?.email ?? ''" (verified)="onEmailVerified()" />
+        </section>
+      }
 
       <!-- Become a seller (buyers only) -->
       @if (auth.isBuyer()) {
@@ -192,7 +229,8 @@ interface AdminLink {
           </div>
           <p class="ac-muted">
             Your earnings are paid here. Once you've earned the minimum, request a withdrawal from your
-            <a routerLink="/seller/dashboard">Seller dashboard</a> — an admin then disburses it to this UPI via Cashfree.
+            <a routerLink="/seller/dashboard">Seller dashboard</a> — an admin then disburses it to this UPI via
+            Cashfree.
           </p>
           <div class="ac-row">
             <input
@@ -222,7 +260,15 @@ interface AdminLink {
         </div>
         <form (ngSubmit)="changePassword()">
           <!-- Hidden username target so the password manager fills here, not the nav search. -->
-          <input class="ac-hidden-user" type="text" [value]="auth.user()?.email" autocomplete="username" tabindex="-1" readonly aria-hidden="true" />
+          <input
+            class="ac-hidden-user"
+            type="text"
+            [value]="auth.user()?.email"
+            autocomplete="username"
+            tabindex="-1"
+            readonly
+            aria-hidden="true"
+          />
           <div class="ac-pw">
             <app-text-field
               label="Current password"
@@ -335,7 +381,9 @@ interface AdminLink {
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
         border: 2px solid #16141e;
       }
-      .ac-avatar.busy { opacity: 0.7; }
+      .ac-avatar.busy {
+        opacity: 0.7;
+      }
       .ac-spin {
         width: 12px;
         height: 12px;
@@ -345,7 +393,9 @@ interface AdminLink {
         animation: ac-spin 0.7s linear infinite;
       }
       @keyframes ac-spin {
-        to { transform: rotate(360deg); }
+        to {
+          transform: rotate(360deg);
+        }
       }
       .ac-hero-text {
         min-width: 0;
@@ -458,7 +508,10 @@ interface AdminLink {
         border: 1px solid #e9e5d8;
         border-radius: 14px;
         padding: 16px 18px;
-        transition: border-color 0.15s, background 0.15s, transform 0.15s;
+        transition:
+          border-color 0.15s,
+          background 0.15s,
+          transform 0.15s;
       }
       .ac-attn-item:hover {
         transform: translateY(-2px);
@@ -508,7 +561,10 @@ interface AdminLink {
         border: 1px solid #e9e5d8;
         border-radius: 14px;
         padding: 16px;
-        transition: border-color 0.15s, background 0.15s, transform 0.15s;
+        transition:
+          border-color 0.15s,
+          background 0.15s,
+          transform 0.15s;
       }
       .ac-tile:hover {
         transform: translateY(-2px);
@@ -676,6 +732,7 @@ export class AccountComponent {
   private api = inject(ApiService);
   private toast = inject(ToastService);
   private router = inject(Router);
+  private consent = inject(ConsentDialogService);
   private destroyRef = inject(DestroyRef);
 
   protected upgrading = signal(false);
@@ -712,10 +769,19 @@ export class AccountComponent {
     nonNullable: true,
     validators: [Validators.pattern(/^[\w.\-]{2,}@[a-zA-Z]{2,}$/)],
   });
-  protected pName = new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.minLength(2)] });
-  protected pPhone = new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.pattern(/^[6-9]\d{9}$/)] });
+  protected pName = new FormControl('', {
+    nonNullable: true,
+    validators: [Validators.required, Validators.minLength(2)],
+  });
+  protected pPhone = new FormControl('', {
+    nonNullable: true,
+    validators: [Validators.required, Validators.pattern(/^[6-9]\d{9}$/)],
+  });
   protected curPw = new FormControl('', { nonNullable: true, validators: [Validators.required] });
-  protected newPw = new FormControl('', { nonNullable: true, validators: [Validators.required, Validators.minLength(8)] });
+  protected newPw = new FormControl('', {
+    nonNullable: true,
+    validators: [Validators.required, Validators.minLength(8)],
+  });
   protected confirmPw = new FormControl('', { nonNullable: true, validators: [Validators.required] });
 
   constructor() {
@@ -758,8 +824,16 @@ export class AccountComponent {
     }
   }
 
-  protected becomeSeller() {
+  /** Verify panel succeeded — the session is already refreshed; just confirm. */
+  protected onEmailVerified() {
+    this.toast.success('Email verified.');
+  }
+
+  protected async becomeSeller() {
     if (this.upgrading()) return;
+    // Accepting the Seller Agreement is a precondition of becoming a seller.
+    const accepted = await this.consent.require('SELLER_AGREEMENT');
+    if (!accepted) return;
     this.upgrading.set(true);
     this.auth
       .becomeSeller()
@@ -853,7 +927,9 @@ export class AccountComponent {
     return '';
   }
   protected form_pwInvalid(): boolean {
-    return this.curPw.invalid || this.newPw.invalid || this.confirmPw.invalid || this.newPw.value !== this.confirmPw.value;
+    return (
+      this.curPw.invalid || this.newPw.invalid || this.confirmPw.invalid || this.newPw.value !== this.confirmPw.value
+    );
   }
 
   protected saveProfile() {

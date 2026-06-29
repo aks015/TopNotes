@@ -59,6 +59,9 @@ public class SecurityConfig {
 
                 // ── Public endpoints ───────────────────────
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                // Email verification is tied to the signed-in user — must come
+                // BEFORE the broad /auth/** permitAll so it stays authenticated.
+                .requestMatchers("/auth/email/**").authenticated()
                 .requestMatchers("/auth/**").permitAll()
                 .requestMatchers("/health").permitAll()
                 // Payment gateway webhooks are authenticated by signature, not JWT

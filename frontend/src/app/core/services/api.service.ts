@@ -29,6 +29,7 @@ import {
   SellerTest,
   TestResult,
   QualificationReview,
+  PendingNote,
 } from '../models';
 
 @Injectable({ providedIn: 'root' })
@@ -73,10 +74,16 @@ export class ApiService {
     });
   }
   /** Median suggested price for an exam+subject (null if not enough data). */
-  getSuggestedPrice(exam: string, subject: string): Observable<ApiResponse<{ price: number | null; sampleSize: number }>> {
-    return this.http.get<ApiResponse<{ price: number | null; sampleSize: number }>>(`${this.base}/notes/price-suggestion`, {
-      params: this.p({ exam, subject }),
-    });
+  getSuggestedPrice(
+    exam: string,
+    subject: string,
+  ): Observable<ApiResponse<{ price: number | null; sampleSize: number }>> {
+    return this.http.get<ApiResponse<{ price: number | null; sampleSize: number }>>(
+      `${this.base}/notes/price-suggestion`,
+      {
+        params: this.p({ exam, subject }),
+      },
+    );
   }
   /** Update an existing listing's editable fields (+ optional new pdf/thumbnail). */
   updateNote(id: number, fd: FormData): Observable<HttpEvent<ApiResponse<Note>>> {
@@ -96,6 +103,10 @@ export class ApiService {
   }
   deleteNote(id: number): Observable<ApiResponse<void>> {
     return this.http.delete<ApiResponse<void>>(`${this.base}/notes/${id}`);
+  }
+  /** Hard-delete a trashed, never-sold note. */
+  permanentlyDeleteNote(id: number): Observable<ApiResponse<void>> {
+    return this.http.delete<ApiResponse<void>>(`${this.base}/notes/${id}/permanent`);
   }
   cloneNote(id: number): Observable<ApiResponse<Note>> {
     return this.http.post<ApiResponse<Note>>(`${this.base}/notes/${id}/clone`, {});
@@ -168,7 +179,9 @@ export class ApiService {
     return this.http.delete<ApiResponse<Taxonomy>>(`${this.base}/admin/taxonomy/categories/${id}`);
   }
   createExam(categoryId: number, name: string): Observable<ApiResponse<Taxonomy>> {
-    return this.http.post<ApiResponse<Taxonomy>>(`${this.base}/admin/taxonomy/categories/${categoryId}/exams`, { name });
+    return this.http.post<ApiResponse<Taxonomy>>(`${this.base}/admin/taxonomy/categories/${categoryId}/exams`, {
+      name,
+    });
   }
   updateExam(id: number, body: { name?: string; active?: boolean }): Observable<ApiResponse<Taxonomy>> {
     return this.http.put<ApiResponse<Taxonomy>>(`${this.base}/admin/taxonomy/exams/${id}`, body);
@@ -197,7 +210,10 @@ export class ApiService {
     return this.http.get<ApiResponse<SellerTest>>(`${this.base}/seller/qualifications/${categoryId}/test`);
   }
   submitCategoryTest(categoryId: number, answers: Record<number, string>): Observable<ApiResponse<TestResult>> {
-    return this.http.post<ApiResponse<TestResult>>(`${this.base}/seller/qualifications/${categoryId}/test/submit`, answers);
+    return this.http.post<ApiResponse<TestResult>>(
+      `${this.base}/seller/qualifications/${categoryId}/test/submit`,
+      answers,
+    );
   }
   uploadQualificationMarksheet(categoryId: number, fd: FormData): Observable<ApiResponse<string>> {
     return this.http.post<ApiResponse<string>>(`${this.base}/seller/qualifications/${categoryId}/marksheet`, fd);
@@ -210,6 +226,17 @@ export class ApiService {
   reviewQualification(id: number, approved: boolean, reason?: string): Observable<ApiResponse<QualificationReview>> {
     return this.http.post<ApiResponse<QualificationReview>>(`${this.base}/admin/qualifications/${id}/review`, null, {
       params: this.p(reason ? { approved, reason } : { approved }),
+    });
+  }
+  getPendingNotes(page = 0): Observable<ApiResponse<PageResponse<PendingNote>>> {
+    return this.http.get<ApiResponse<PageResponse<PendingNote>>>(`${this.base}/admin/notes/pending`, {
+      params: this.p({ page, size: 20 }),
+    });
+  }
+  reviewNote(id: number, approved: boolean, reason?: string): Observable<ApiResponse<void>> {
+    return this.http.post<ApiResponse<void>>(`${this.base}/admin/notes/${id}/review`, {
+      approved,
+      reason: reason ?? null,
     });
   }
 
@@ -357,7 +384,11 @@ export class ApiService {
       params: this.p(categoryId != null ? { categoryId } : {}),
     });
   }
-  getTestQuestions(keyword?: string, page = 0, categoryId?: number | null): Observable<ApiResponse<PageResponse<TestQuestionAdmin>>> {
+  getTestQuestions(
+    keyword?: string,
+    page = 0,
+    categoryId?: number | null,
+  ): Observable<ApiResponse<PageResponse<TestQuestionAdmin>>> {
     const p: Record<string, unknown> = { page, size: 20 };
     if (keyword) p['keyword'] = keyword;
     if (categoryId != null) p['categoryId'] = categoryId;

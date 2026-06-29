@@ -2,6 +2,7 @@ package com.topnotes.service;
 
 import com.topnotes.dto.request.ConfigUpdateRequest;
 import com.topnotes.dto.response.NoteResponse;
+import com.topnotes.dto.response.PendingNoteResponse;
 import com.topnotes.dto.response.UserResponse;
 import com.topnotes.entity.enums.UserRole;
 import com.topnotes.entity.enums.UserStatus;
@@ -20,4 +21,10 @@ public interface AdminService {
     Map<String, String>      getAllConfig();
     void                     updateConfig(ConfigUpdateRequest request);
     Page<NoteResponse>       getAllNotes(Pageable pageable);
+
+    /** Notes awaiting admin content review (the seller's own original-work check). */
+    Page<PendingNoteResponse> getPendingNotes(Pageable pageable);
+
+    /** Approve (→ live) or reject (→ needs changes) a pending note; notifies the seller. */
+    void                     reviewNote(Long noteId, boolean approved, String reason);
 }

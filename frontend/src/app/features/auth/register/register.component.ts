@@ -6,8 +6,8 @@ import { AuthService } from '@core/services/auth.service';
 import { AuthShellComponent } from '../ui/auth-shell.component';
 import { TextFieldComponent } from '@ui/text-field/text-field.component';
 import { ButtonComponent } from '@ui/button/button.component';
-
-type Role = 'student' | 'seller';
+import { EmailVerifyComponent } from '@ui/email-verify/email-verify.component';
+import { ConsentDialogService } from '@core/services/consent-dialog.service';
 
 const STRENGTH = ['', 'Weak', 'Fair', 'Good', 'Strong'] as const;
 
@@ -21,101 +21,31 @@ function passwordsMatch(group: AbstractControl): ValidationErrors | null {
   selector: 'app-register',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, RouterLink, AuthShellComponent, TextFieldComponent, ButtonComponent],
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    AuthShellComponent,
+    TextFieldComponent,
+    ButtonComponent,
+    EmailVerifyComponent,
+  ],
   styleUrls: ['../auth.css'],
   template: `
     <app-auth-shell>
       <div card>
-        <div class="steps" aria-hidden="true">
-          <span class="step" [class.on]="step() === 1" [class.done]="step() === 2">
-            <span class="dot">{{ step() === 2 ? '✓' : '1' }}</span>
-            <span class="lbl">Choose role</span>
-          </span>
-          <span class="seg" [class.on]="step() === 2"></span>
-          <span class="step" [class.on]="step() === 2">
-            <span class="dot">2</span>
-            <span class="lbl">Your details</span>
-          </span>
-        </div>
-
         @if (step() === 1) {
           <div class="kicker">takes under a minute</div>
           <div class="card-head">
             <h1>Create your account</h1>
-            <p>First, tell us how you'll use TopNotes.</p>
+            <p>One account to buy notes — and to sell yours whenever you're ready.</p>
           </div>
 
-          <div class="roles" role="radiogroup" aria-label="Account type" (keydown.enter)="role() && step.set(2)">
-            <label class="role student">
-              <input
-                type="radio"
-                name="role"
-                value="student"
-                [checked]="role() === 'student'"
-                (change)="role.set('student')"
-              />
-              <span class="role-ic" aria-hidden="true">S</span>
-              <span class="role-txt">
-                <h3>I'm a Student <small>(Buyer)</small></h3>
-                <p>Browse and buy verified notes to ace your exams.</p>
-              </span>
-              <span class="role-check" aria-hidden="true">✓</span>
-            </label>
-
-            <label class="role seller">
-              <input
-                type="radio"
-                name="role"
-                value="seller"
-                [checked]="role() === 'seller'"
-                (change)="role.set('seller')"
-              />
-              <span class="role-ic" aria-hidden="true">T</span>
-              <span class="role-txt">
-                <h3>I'm a Topper <small>(Seller)</small></h3>
-                <p>Upload your handwritten notes and earn from your rank.</p>
-              </span>
-              <span class="role-check" aria-hidden="true">✓</span>
-            </label>
-          </div>
-
-          <div class="continue-wrap" [class.idle]="!role()" style="margin-top:24px">
-            <app-button size="lg" [block]="true" [disabled]="!role()" (clicked)="step.set(2)">Continue</app-button>
-          </div>
-          <p class="signup" style="margin-top:24px">
-            Already have an account? <a class="link" routerLink="/login">Log in</a>
-          </p>
-        }
-
-        @if (step() === 2) {
-          <button type="button" class="back-btn" (click)="step.set(1)">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path
-                d="M10 3 5 8l5 5"
-                stroke="currentColor"
-                stroke-width="1.7"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-            Back
-          </button>
-
-          <div class="card-head" style="margin-top:12px">
-            <h1>Your details</h1>
-            <p>Set up your {{ role() === 'seller' ? 'seller' : 'student' }} credentials.</p>
-          </div>
-
-          <div class="role-pill" [class.seller]="role() === 'seller'">
-            <span class="mini" aria-hidden="true">✓</span>
-            {{ role() === 'seller' ? 'Topper (Seller) account' : 'Student (Buyer) account' }}
-          </div>
-
-          @if (role() === 'seller') {
+          @if (sellerIntent) {
             <div class="seller-note" role="note">
               <span class="shield" aria-hidden="true">⛨</span>
               <div>
-                To publish, you’ll qualify per exam category — pass a short test and upload your marksheet for admin review.
+                After signing up we'll start your seller setup — qualify per exam category (a short test + marksheet
+                review) before you can publish.
               </div>
             </div>
           }
@@ -153,7 +83,7 @@ function passwordsMatch(group: AbstractControl): ValidationErrors | null {
             />
 
             <app-text-field
-              label="Phone"
+              label="Phone (optional)"
               type="tel"
               formControlName="phone"
               placeholder="10-digit mobile"
@@ -201,10 +131,31 @@ function passwordsMatch(group: AbstractControl): ValidationErrors | null {
             <app-button type="submit" size="lg" [block]="true" [loading]="loading()">Create account</app-button>
           </form>
 
+          <p class="signup" style="margin-top:18px">
+            Already have an account? <a class="link" routerLink="/login">Log in</a>
+          </p>
           <p class="legal">
             By creating an account you agree to our <a routerLink="/terms">Terms</a> &amp;
             <a routerLink="/privacy">Privacy Policy</a>.
           </p>
+        }
+
+        @if (step() === 2) {
+          <div class="kicker">almost there</div>
+          <div class="card-head">
+            <h1>Verify your email</h1>
+            <p>
+              Confirm <strong>{{ submittedEmail() }}</strong> to secure your account.
+            </p>
+          </div>
+
+          <app-email-verify [email]="submittedEmail()" [autoSend]="true" (verified)="finish()">
+            <button ev-extra type="button" class="link" (click)="skip()">I’ll verify later</button>
+          </app-email-verify>
+
+          @if (sellerIntent) {
+            <p class="legal">Email verification is required before you can take the seller qualification test.</p>
+          }
         }
       </div>
     </app-auth-shell>
@@ -215,28 +166,31 @@ export class RegisterComponent {
   private auth = inject(AuthService);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
+  private consent = inject(ConsentDialogService);
   private destroyRef = inject(DestroyRef);
 
   protected step = signal<1 | 2>(1);
-  protected role = signal<Role | null>(null);
 
-  constructor() {
-    // Deep-link from "Become a seller" pre-selects the role and jumps straight
-    // to the details step (the user already declared intent).
-    const r = this.route.snapshot.queryParamMap.get('role');
-    if (r === 'seller' || r === 'student') {
-      this.role.set(r);
-      this.step.set(2);
-    }
-  }
+  /**
+   * True when the user arrived via a "Become a seller" CTA. We still create a
+   * plain buyer account, then upgrade to seller after email verification —
+   * keeping signup itself dead simple. (`role=seller` kept for back-compat.)
+   */
+  protected readonly sellerIntent = (() => {
+    const q = this.route.snapshot.queryParamMap;
+    return q.get('intent') === 'sell' || q.get('role') === 'seller';
+  })();
+
   protected loading = signal(false);
   protected errorMsg = signal<string | null>(null);
+  protected submittedEmail = signal('');
 
   protected form = this.fb.nonNullable.group(
     {
       fullName: ['', [Validators.required, Validators.minLength(2)]],
       email: ['', [Validators.required, Validators.email]],
-      phone: ['', [Validators.required, Validators.pattern(/^[6-9]\d{9}$/)]],
+      // Optional for everyone at signup; collected/used later for payouts.
+      phone: ['', [Validators.pattern(/^[6-9]\d{9}$/)]],
       password: ['', [Validators.required, Validators.minLength(8)]],
       confirm: ['', [Validators.required]],
     },
@@ -252,10 +206,7 @@ export class RegisterComponent {
     return !!c && c.invalid && c.touched;
   }
   protected phoneError(): string {
-    const c = this.form.get('phone');
-    if (c?.hasError('required')) return 'Phone number is required.';
-    if (c?.hasError('pattern')) return 'Enter a valid 10-digit mobile number.';
-    return '';
+    return this.form.get('phone')?.hasError('pattern') ? 'Enter a valid 10-digit mobile number.' : '';
   }
   protected invalidConfirm(): boolean {
     const c = this.form.get('confirm');
@@ -297,20 +248,56 @@ export class RegisterComponent {
     const fullName = raw.fullName.trim();
     const email = raw.email.trim().toLowerCase();
     const phone = raw.phone.trim();
-    const role = this.role() === 'seller' ? 'SELLER' : 'BUYER';
+
+    // Everyone signs up as a buyer; phone is sent only when provided.
+    const body = { fullName, email, password: raw.password, ...(phone ? { phone } : {}) };
 
     this.auth
-      .register({ fullName, email, phone, password: raw.password, role })
+      .register(body)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
           this.loading.set(false);
-          this.router.navigate([role === 'SELLER' ? '/seller/qualifications' : '/browse']);
+          // Account created + session active → move to email verification
+          // (the verify panel auto-sends the first code).
+          this.submittedEmail.set(email);
+          this.step.set(2);
         },
         error: (err) => {
           this.loading.set(false);
           this.errorMsg.set(err?.error?.message ?? 'Could not create your account. Please try again.');
         },
       });
+  }
+
+  /** Let users (especially buyers) proceed and verify later. */
+  protected skip(): void {
+    this.finish();
+  }
+
+  /**
+   * Route onward after signup. Seller-intent users are upgraded to a seller here
+   * (the single "become a seller" path) and dropped into qualification; everyone
+   * else lands on the marketplace.
+   */
+  protected async finish(): Promise<void> {
+    if (this.sellerIntent) {
+      // Becoming a seller requires accepting the Seller Agreement.
+      const accepted = await this.consent.require('SELLER_AGREEMENT');
+      if (!accepted) {
+        this.router.navigate(['/browse']);
+        return;
+      }
+      this.auth
+        .becomeSeller()
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: () => this.router.navigate(['/seller/qualifications']),
+          // Upgrade failed — they can retry from the account page.
+          error: () => this.router.navigate(['/account']),
+        });
+      return;
+    }
+    this.router.navigate(['/browse']);
   }
 }

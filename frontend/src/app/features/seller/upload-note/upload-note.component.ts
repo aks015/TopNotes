@@ -8,35 +8,51 @@ import { debounceTime } from 'rxjs/operators';
 import { ApiService } from '@core/services/api.service';
 import { AuthService } from '@core/services/auth.service';
 import { ToastService } from '@core/services/toast.service';
+import { ConsentService } from '@core/services/consent.service';
 import { Note, TaxonomyCategory } from '@core/models';
 import { rupee, toTitleCase } from '@shared/util/note-display';
 import { NoteCardComponent } from '@ui/note-card/note-card.component';
+import { ImageCropperComponent, ImageCroppedEvent } from 'ngx-image-cropper';
 
 @Component({
   selector: 'app-upload-note',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, NoteCardComponent, RouterLink],
+  imports: [ReactiveFormsModule, NoteCardComponent, RouterLink, ImageCropperComponent],
   template: `
     <div class="up">
       <!-- Header -->
       <header class="up-head">
         <div class="up-eyebrow">seller studio</div>
         <h1 class="up-title">{{ editMode() ? 'Edit listing' : 'Upload a note' }}</h1>
-        <p class="up-sub">{{ editMode() ? 'Update your listing — changes go live immediately.' : 'Add a new set of notes to the marketplace.' }}</p>
+        <p class="up-sub">
+          {{
+            editMode()
+              ? 'Update your listing — changes go live immediately.'
+              : 'Add a new set of notes to the marketplace.'
+          }}
+        </p>
       </header>
 
       @if (!auth.isVerified()) {
         <div class="up-verify">
           <span class="up-verify-ic">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2.5 4 6v5c0 5 3.5 8 8 9.5 4.5-1.5 8-4.5 8-9.5V6l-8-3.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+              <path
+                d="M12 2.5 4 6v5c0 5 3.5 8 8 9.5 4.5-1.5 8-4.5 8-9.5V6l-8-3.5Z"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linejoin="round"
+              />
               <path d="M12 8.5v4M12 16v.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
             </svg>
           </span>
           <div class="up-verify-tx">
             <b>Verify your account to publish</b>
-            <span>You can prepare your listing now, but publishing needs a one-time check — pass a short test and upload your marksheet.</span>
+            <span
+              >You can prepare your listing now, but publishing needs a one-time check — pass a short test and upload
+              your marksheet.</span
+            >
           </div>
           <a class="up-btn primary" routerLink="/seller/qualifications">Get qualified</a>
         </div>
@@ -55,7 +71,10 @@ import { NoteCardComponent } from '@ui/note-card/note-card.component';
           <section class="up-card">
             <div class="up-sec-head">
               <span class="up-num">1</span>
-              <div><h3>Details</h3><p>Tell buyers what's inside.</p></div>
+              <div>
+                <h3>Details</h3>
+                <p>Tell buyers what's inside.</p>
+              </div>
             </div>
 
             <div class="up-field" [class.invalid]="invalid('title')">
@@ -89,18 +108,32 @@ import { NoteCardComponent } from '@ui/note-card/note-card.component';
 
             <div class="up-row2">
               <div class="up-field" [class.invalid]="invalid('category')">
-                <label class="up-label" for="up-category">Exam category</label>
+                <div class="up-label-row">
+                  <label class="up-label" for="up-category">Exam category</label>
+                  @if (eligible().length) {
+                    <span class="up-count">🔒 your domain</span>
+                  }
+                </div>
                 <select id="up-category" class="up-select" formControlName="category">
                   <option value="" disabled>Select a category…</option>
                   @for (c of categories(); track c.id) {
                     <option [value]="c.name">{{ c.name }}</option>
                   }
                 </select>
-                <div class="up-err">Choose an exam category.</div>
+                @if (eligible().length) {
+                  <p class="up-hint">Locked to the domain you're verified in.</p>
+                } @else {
+                  <div class="up-err">Choose an exam category.</div>
+                }
               </div>
               <div class="up-field" [class.invalid]="invalid('exam')">
                 <label class="up-label" for="up-exam">Exam</label>
-                <select id="up-exam" class="up-select" formControlName="exam" [class.muted]="!examsForCategory().length">
+                <select
+                  id="up-exam"
+                  class="up-select"
+                  formControlName="exam"
+                  [class.muted]="!examsForCategory().length"
+                >
                   <option value="" disabled>{{ fv().category ? 'Select an exam…' : 'Pick a category first' }}</option>
                   @for (e of examsForCategory(); track e.id) {
                     <option [value]="e.name">{{ e.name }}</option>
@@ -113,7 +146,12 @@ import { NoteCardComponent } from '@ui/note-card/note-card.component';
             <div class="up-row2">
               <div class="up-field" [class.invalid]="invalid('subject')">
                 <label class="up-label" for="up-subject">Subject</label>
-                <select id="up-subject" class="up-select" formControlName="subject" [class.muted]="!subjectsForExam().length">
+                <select
+                  id="up-subject"
+                  class="up-select"
+                  formControlName="subject"
+                  [class.muted]="!subjectsForExam().length"
+                >
                   <option value="" disabled>{{ fv().exam ? 'Select a subject…' : 'Pick an exam first' }}</option>
                   @for (s of subjectsForExam(); track s.id) {
                     <option [value]="s.name">{{ s.name }}</option>
@@ -145,8 +183,8 @@ import { NoteCardComponent } from '@ui/note-card/note-card.component';
               <div class="up-field up-price-tip">
                 @if (suggestedPrice() != null) {
                   <span>
-                    Similar {{ fv().exam }} · {{ fv().subject }} notes sell around
-                    <b>{{ rupee(suggestedPrice()!) }}</b>.
+                    Similar {{ fv().exam }} · {{ fv().subject }} notes sell around <b>{{ rupee(suggestedPrice()!) }}</b
+                    >.
                     <button type="button" class="up-link" (click)="applySuggestedPrice()">Use this</button>
                   </span>
                 } @else {
@@ -160,33 +198,50 @@ import { NoteCardComponent } from '@ui/note-card/note-card.component';
           <section class="up-card">
             <div class="up-sec-head">
               <span class="up-num">2</span>
-              <div><h3>Files</h3><p>Upload the notes PDF and an optional cover.</p></div>
+              <div>
+                <h3>Files</h3>
+                <p>Upload the notes PDF and an optional cover.</p>
+              </div>
             </div>
 
             <input #pdfInput type="file" accept="application/pdf" hidden (change)="onPdf($any($event.target).files)" />
-            <div
-              class="up-drop"
-              role="button"
-              tabindex="0"
-              [class.drag]="dragging()"
-              [class.err]="submitAttempted() && !pdfFile() && !editMode()"
-              (click)="pdfInput.click()"
-              (keydown.enter)="pdfInput.click()"
-              (dragover)="$event.preventDefault(); dragging.set(true)"
-              (dragleave)="dragging.set(false)"
-              (drop)="$event.preventDefault(); dragging.set(false); onPdf($any($event).dataTransfer.files)"
-            >
-              <div class="up-drop-ic">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                  <path d="M12 15V4m0 0L8 8m4-4 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-                  <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-                </svg>
+            <!-- Single PDF: the dropzone hides once a file is chosen (Replace/Remove from the file row). -->
+            @if (!pdfFile()) {
+              <div
+                class="up-drop"
+                role="button"
+                tabindex="0"
+                [class.drag]="dragging()"
+                [class.err]="submitAttempted() && !pdfFile() && !editMode()"
+                (click)="pdfInput.click()"
+                (keydown.enter)="pdfInput.click()"
+                (dragover)="$event.preventDefault(); dragging.set(true)"
+                (dragleave)="dragging.set(false)"
+                (drop)="$event.preventDefault(); dragging.set(false); onPdf($any($event).dataTransfer.files)"
+              >
+                <div class="up-drop-ic">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path
+                      d="M12 15V4m0 0L8 8m4-4 4 4"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                    <path
+                      d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                </div>
+                <h4>{{ editMode() ? 'Replace PDF (optional)' : 'Drag & drop your PDF here' }}</h4>
+                <p>or click to browse · PDF only · max 50MB</p>
               </div>
-              <h4>{{ editMode() ? 'Replace PDF (optional)' : 'Drag & drop your PDF here' }}</h4>
-              <p>or click to browse · PDF only · max 50MB</p>
-            </div>
-            @if (editMode() && hasExistingPdf() && !pdfFile()) {
-              <div class="up-hint">Current PDF is kept unless you upload a new one.</div>
+              @if (editMode() && hasExistingPdf()) {
+                <div class="up-hint">Current PDF is kept unless you upload a new one.</div>
+              }
             }
             @if (submitAttempted() && !pdfFile() && !editMode()) {
               <div class="up-drop-err">The notes PDF is required to publish.</div>
@@ -197,8 +252,11 @@ import { NoteCardComponent } from '@ui/note-card/note-card.component';
                 <span class="up-file-ic">PDF</span>
                 <div class="up-file-body">
                   <div class="up-file-name">{{ f.name }}</div>
-                  <div class="up-file-sub">{{ (f.size / 1048576).toFixed(1) }} MB · check it's the right file below</div>
+                  <div class="up-file-sub">
+                    {{ (f.size / 1048576).toFixed(1) }} MB · check it's the right file below
+                  </div>
                 </div>
+                <button type="button" class="up-btn outline sm" (click)="clearPdf(); pdfInput.click()">Replace</button>
                 <button type="button" class="up-btn ghost sm" (click)="clearPdf()">Remove</button>
               </div>
               @if (pdfPreviewSrc(); as src) {
@@ -220,6 +278,9 @@ import { NoteCardComponent } from '@ui/note-card/note-card.component';
                   <div class="up-file-name">Cover image</div>
                   <div class="up-file-sub">Shown on the note card</div>
                 </div>
+                @if (cropSource()) {
+                  <button type="button" class="up-btn outline sm" (click)="editCover()">Edit</button>
+                }
                 <button type="button" class="up-btn ghost sm" (click)="removeThumb()">Remove</button>
               </div>
             } @else {
@@ -230,11 +291,40 @@ import { NoteCardComponent } from '@ui/note-card/note-card.component';
             }
           </section>
 
+          <!-- Cover crop modal -->
+          @if (cropOpen() && cropSource(); as src) {
+            <div class="up-crop-scrim" (click)="cancelCrop()">
+              <div class="up-crop" (click)="$event.stopPropagation()">
+                <h3>Crop your cover</h3>
+                <p class="up-crop-sub">Frame it the way it should appear on your note card.</p>
+                <div class="up-crop-stage">
+                  <image-cropper
+                    [imageFile]="src"
+                    [maintainAspectRatio]="true"
+                    [aspectRatio]="16 / 9"
+                    [resizeToWidth]="1000"
+                    format="webp"
+                    (imageCropped)="onCropped($event)"
+                  />
+                </div>
+                <div class="up-crop-foot">
+                  <button type="button" class="up-btn ghost" (click)="cancelCrop()">Cancel</button>
+                  <button type="button" class="up-btn primary" [disabled]="!croppedReady()" (click)="useCrop()">
+                    Use this cover
+                  </button>
+                </div>
+              </div>
+            </div>
+          }
+
           <!-- 3 · Review & publish -->
           <section class="up-card">
             <div class="up-sec-head">
               <span class="up-num">3</span>
-              <div><h3>Review &amp; publish</h3><p>Check the preview, then publish to the marketplace.</p></div>
+              <div>
+                <h3>Review &amp; publish</h3>
+                <p>Check the preview, then publish to the marketplace.</p>
+              </div>
             </div>
 
             @if (auth.isVerified()) {
@@ -252,7 +342,9 @@ import { NoteCardComponent } from '@ui/note-card/note-card.component';
                   }
                 </ul>
               } @else {
-                <p class="up-ready">✓ {{ editMode() ? 'Looks good — save your changes.' : 'Ready to publish — your listing looks good.' }}</p>
+                <p class="up-ready">
+                  ✓ {{ editMode() ? 'Looks good — save your changes.' : 'Ready to publish — your listing looks good.' }}
+                </p>
               }
 
               @if (publishing() && uploadPct() > 0) {
@@ -265,8 +357,12 @@ import { NoteCardComponent } from '@ui/note-card/note-card.component';
               <button type="submit" class="up-btn primary lg" [disabled]="publishing()">
                 {{
                   publishing()
-                    ? (uploadPct() < 100 && uploadPct() > 0 ? 'Uploading ' + uploadPct() + '%…' : 'Saving…')
-                    : (editMode() ? 'Save changes' : 'Publish note')
+                    ? uploadPct() < 100 && uploadPct() > 0
+                      ? 'Uploading ' + uploadPct() + '%…'
+                      : 'Saving…'
+                    : editMode()
+                      ? 'Save changes'
+                      : 'Publish note'
                 }}
               </button>
             } @else {
@@ -429,7 +525,9 @@ import { NoteCardComponent } from '@ui/note-card/note-card.component';
         font-size: 14.5px;
         color: #16141e;
         background: #fff;
-        transition: border-color 0.16s, box-shadow 0.16s;
+        transition:
+          border-color 0.16s,
+          box-shadow 0.16s;
       }
       .up-textarea {
         min-height: 116px;
@@ -445,8 +543,7 @@ import { NoteCardComponent } from '@ui/note-card/note-card.component';
       .up-select {
         appearance: none;
         -webkit-appearance: none;
-        background:
-          #fff
+        background: #fff
           url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235b5870' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>")
           no-repeat right 14px center;
         padding-right: 38px;
@@ -463,6 +560,12 @@ import { NoteCardComponent } from '@ui/note-card/note-card.component';
       }
       .up-select.muted {
         color: #a8a4b8;
+      }
+      .up-select:disabled {
+        background-color: #f3f1ea;
+        color: #4b4860;
+        cursor: not-allowed;
+        opacity: 1;
       }
       .up-price-tip {
         display: flex;
@@ -497,7 +600,9 @@ import { NoteCardComponent } from '@ui/note-card/note-card.component';
         text-align: center;
         cursor: pointer;
         background: #fbfaf6;
-        transition: border-color 0.16s, background 0.16s;
+        transition:
+          border-color 0.16s,
+          background 0.16s;
       }
       .up-drop:hover,
       .up-drop.drag {
@@ -580,6 +685,50 @@ import { NoteCardComponent } from '@ui/note-card/note-card.component';
       }
       .up-add-cover {
         margin-top: 12px;
+      }
+      /* Cover crop modal */
+      .up-crop-scrim {
+        position: fixed;
+        inset: 0;
+        background: rgba(22, 20, 30, 0.55);
+        display: grid;
+        place-items: center;
+        z-index: 100;
+        padding: 24px;
+      }
+      .up-crop {
+        background: #fff;
+        border-radius: 18px;
+        padding: 22px;
+        width: min(560px, 100%);
+      }
+      .up-crop h3 {
+        margin: 0 0 4px;
+        font-family: 'Bricolage Grotesque', system-ui, sans-serif;
+        font-weight: 700;
+        font-size: 19px;
+      }
+      .up-crop-sub {
+        margin: 0 0 14px;
+        font-size: 13.5px;
+        color: #5b5870;
+      }
+      .up-crop-stage {
+        background: #f3f1ea;
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .up-crop-stage image-cropper {
+        max-height: 52vh;
+        display: block;
+      }
+      .up-crop-foot {
+        display: flex;
+        gap: 10px;
+        margin-top: 16px;
+      }
+      .up-crop-foot .up-btn {
+        flex: 1;
       }
       .up-hint {
         margin: 8px 0 0;
@@ -711,7 +860,10 @@ import { NoteCardComponent } from '@ui/note-card/note-card.component';
         border-radius: 99px;
         border: none;
         cursor: pointer;
-        transition: background 0.18s, color 0.18s, border-color 0.18s;
+        transition:
+          background 0.18s,
+          color 0.18s,
+          border-color 0.18s;
       }
       .up-btn.primary {
         background: #16141e;
@@ -793,6 +945,7 @@ export class UploadNoteComponent {
   private api = inject(ApiService);
   protected auth = inject(AuthService);
   private toast = inject(ToastService);
+  private consent = inject(ConsentService);
   private router = inject(Router);
   private destroyRef = inject(DestroyRef);
 
@@ -808,6 +961,13 @@ export class UploadNoteComponent {
   protected pdfFile = signal<File | null>(null);
   protected thumbFile = signal<File | null>(null);
   protected thumbUrl = signal<string | null>(null);
+
+  // ── Cover crop ────────────────────────────────────────────
+  protected cropOpen = signal(false);
+  /** The originally-picked image fed to the cropper (kept so "Edit" can re-crop). */
+  protected cropSource = signal<File | null>(null);
+  protected croppedReady = signal(false);
+  private croppedBlob: Blob | null = null;
   protected dragging = signal(false);
   protected publishing = signal(false);
   protected submitAttempted = signal(false);
@@ -820,6 +980,8 @@ export class UploadNoteComponent {
   protected suggestedPrice = signal<number | null>(null);
 
   protected taxonomy = signal<TaxonomyCategory[]>([]);
+  /** Categories the seller is approved to sell in (their single domain). */
+  protected eligible = signal<string[]>([]);
 
   protected form = this.fb.nonNullable.group({
     title: ['', [Validators.required, Validators.minLength(5)]],
@@ -852,16 +1014,12 @@ export class UploadNoteComponent {
 
     // Cascade resets: changing a parent clears its dependent selections
     // (suppressed while we prefill an existing listing).
-    this.form.controls.category.valueChanges
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => {
-        if (!this.suppressCascade) this.form.patchValue({ exam: '', subject: '' });
-      });
-    this.form.controls.exam.valueChanges
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => {
-        if (!this.suppressCascade) this.form.patchValue({ subject: '' });
-      });
+    this.form.controls.category.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      if (!this.suppressCascade) this.form.patchValue({ exam: '', subject: '' });
+    });
+    this.form.controls.exam.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      if (!this.suppressCascade) this.form.patchValue({ subject: '' });
+    });
 
     // Suggested price — refetch when exam or subject settles.
     this.form.valueChanges
@@ -872,6 +1030,30 @@ export class UploadNoteComponent {
       .getTaxonomy()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({ next: (r) => this.taxonomy.set(r.data?.categories ?? []), error: () => {} });
+
+    // Sellers can only list in their approved domain → lock the category to it.
+    this.api
+      .getEligibleCategories()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (r) => {
+          const list = r.data ?? [];
+          this.eligible.set(list);
+          if (list.length) {
+            // New upload → auto-select the seller's domain. (Edit keeps the note's own.)
+            if (!this.editMode()) {
+              this.suppressCascade = true;
+              this.form.patchValue({ category: list[0] });
+              this.suppressCascade = false;
+              this.formValue.set(this.form.getRawValue());
+            }
+            // Lock the field either way — a note can't leave the seller's domain.
+            this.form.controls.category.disable({ emitEvent: false });
+            this.formValue.set(this.form.getRawValue());
+          }
+        },
+        error: () => {},
+      });
 
     if (this.editMode()) this.loadExisting(this.editId()!);
   }
@@ -917,7 +1099,10 @@ export class UploadNoteComponent {
     this.api
       .getSuggestedPrice(exam, subject)
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({ next: (r) => this.suggestedPrice.set(r.data?.price ?? null), error: () => this.suggestedPrice.set(null) });
+      .subscribe({
+        next: (r) => this.suggestedPrice.set(r.data?.price ?? null),
+        error: () => this.suggestedPrice.set(null),
+      });
   }
 
   protected applySuggestedPrice() {
@@ -930,7 +1115,12 @@ export class UploadNoteComponent {
   protected titleLen = computed(() => this.formValue().title.length);
   protected descLen = computed(() => this.formValue().description.length);
 
-  protected categories = computed(() => this.taxonomy());
+  protected categories = computed(() => {
+    const elig = this.eligible();
+    const all = this.taxonomy();
+    // Only the seller's approved domain(s); fall back to all until eligibility loads.
+    return elig.length ? all.filter((c) => elig.includes(c.name)) : all;
+  });
   protected examsForCategory = computed(
     () => this.taxonomy().find((c) => c.name === this.formValue().category)?.exams ?? [],
   );
@@ -1056,10 +1246,33 @@ export class UploadNoteComponent {
       this.toast.error('Cover image must be under 5MB.');
       return;
     }
+    // Open the cropper instead of using the raw file directly.
+    this.cropSource.set(f);
+    this.croppedBlob = null;
+    this.croppedReady.set(false);
+    this.cropOpen.set(true);
+  }
+
+  // ── Cover crop ────────────────────────────────────────────
+  protected onCropped(e: ImageCroppedEvent) {
+    this.croppedBlob = e.blob ?? null;
+    this.croppedReady.set(!!this.croppedBlob);
+  }
+  /** Re-open the cropper on the originally-picked image. */
+  protected editCover() {
+    if (this.cropSource()) this.cropOpen.set(true);
+  }
+  protected cancelCrop() {
+    this.cropOpen.set(false);
+  }
+  protected useCrop() {
+    if (!this.croppedBlob) return;
+    const file = new File([this.croppedBlob], 'cover.webp', { type: 'image/webp' });
     const prev = this.thumbUrl();
     if (prev) URL.revokeObjectURL(prev);
-    this.thumbFile.set(f);
-    this.thumbUrl.set(URL.createObjectURL(f));
+    this.thumbFile.set(file);
+    this.thumbUrl.set(URL.createObjectURL(file));
+    this.cropOpen.set(false);
   }
 
   protected removeThumb() {
@@ -1067,6 +1280,8 @@ export class UploadNoteComponent {
     if (prev) URL.revokeObjectURL(prev);
     this.thumbFile.set(null);
     this.thumbUrl.set(null);
+    this.cropSource.set(null);
+    this.croppedBlob = null;
   }
 
   protected publish() {
@@ -1104,8 +1319,21 @@ export class UploadNoteComponent {
           this.uploadPct.set(Math.round((100 * event.loaded) / event.total));
         } else if (event.type === HttpEventType.Response) {
           this.publishing.set(false);
-          if (!editing) localStorage.removeItem(this.DRAFT_KEY);
-          this.toast.success(editing ? 'Listing updated ✓' : 'Note published to the marketplace 🎉');
+          if (!editing) {
+            localStorage.removeItem(this.DRAFT_KEY);
+            // Record the per-note originality declaration against the new note
+            // (best-effort — never blocks the success path).
+            const newId = event.body?.data?.id;
+            if (newId) {
+              this.consent
+                .recordConsent('ORIGINALITY_DECLARATION', newId)
+                .pipe(takeUntilDestroyed(this.destroyRef))
+                .subscribe({ next: () => {}, error: () => {} });
+            }
+          }
+          this.toast.success(
+            editing ? 'Listing updated ✓' : 'Note submitted for review — you’ll be notified once an admin approves it.',
+          );
           this.router.navigate(['/seller/notes']);
         }
       },

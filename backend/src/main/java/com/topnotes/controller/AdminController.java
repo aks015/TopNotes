@@ -1,6 +1,7 @@
 package com.topnotes.controller;
 
 import com.topnotes.dto.request.ConfigUpdateRequest;
+import com.topnotes.dto.request.NoteReviewRequest;
 import com.topnotes.dto.response.*;
 import com.topnotes.entity.enums.UserRole;
 import com.topnotes.entity.enums.UserStatus;
@@ -141,5 +142,26 @@ public class AdminController {
 
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         return ResponseEntity.ok(ApiResponse.success(adminService.getAllNotes(pageable)));
+    }
+
+    // ── Note content review ───────────────────────────────────
+
+    @GetMapping("/notes/pending")
+    @Operation(summary = "List notes awaiting content review (oldest first)")
+    public ResponseEntity<ApiResponse<Page<PendingNoteResponse>>> getPendingNotes(
+            @RequestParam(defaultValue = "0")  int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "createdAt"));
+        return ResponseEntity.ok(ApiResponse.success(adminService.getPendingNotes(pageable)));
+    }
+
+    @PostMapping("/notes/{id}/review")
+    @Operation(summary = "Approve (→ live) or reject (→ needs changes) a pending note")
+    public ResponseEntity<ApiResponse<Void>> reviewNote(
+            @PathVariable Long id, @RequestBody NoteReviewRequest body) {
+
+        adminService.reviewNote(id, body.isApproved(), body.getReason());
+        return ResponseEntity.ok(ApiResponse.success(body.isApproved() ? "Note approved & live" : "Note rejected"));
     }
 }

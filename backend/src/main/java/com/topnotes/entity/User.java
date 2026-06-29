@@ -60,6 +60,11 @@ public class User {
     @Column(columnDefinition = "TEXT")
     private String profileImageUrl;
 
+    /** True once the user confirms control of their email via OTP. */
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean emailVerified = false;
+
     // ── Seller-specific fields ────────────────────────────────
     @Column(length = 60)
     private String classLevel;

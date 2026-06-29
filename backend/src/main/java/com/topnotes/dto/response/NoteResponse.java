@@ -30,6 +30,8 @@ public class NoteResponse {
     private String            previewUrl;
     private Integer           totalPages;
     private NoteStatus        status;
+    /** True once an admin has approved the current content — gates the seller's "publish" action. */
+    private Boolean           approved;
     private Integer           purchaseCount;
     private Integer           viewCount;
     private BigDecimal        averageRating;
@@ -48,4 +50,6 @@ public class NoteResponse {
     private BigDecimal        suggestedPrice;
     /** Daily sales counts over the last 30 days (oldest→newest) for a sparkline. */
     private List<Integer>     salesTrend;
+    /** Admin's reason when REJECTED (seller-only) — so the seller knows what to fix. */
+    private String            rejectionReason;
 }

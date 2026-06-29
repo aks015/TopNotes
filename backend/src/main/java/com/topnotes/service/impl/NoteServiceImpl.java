@@ -145,10 +145,11 @@ public class NoteServiceImpl implements NoteService {
                 .thumbnailUrl(thumbnailUrl)
                 .totalPages(totalPages)
                 .seller(seller)
+                .status(NoteStatus.PENDING_REVIEW)   // admin reviews content before it goes live
                 .build();
 
         Note saved = noteRepository.save(note);
-        log.info("Note id={} created by seller id={}", saved.getId(), sellerId);
+        log.info("Note id={} created by seller id={} — pending admin review", saved.getId(), sellerId);
         return toResponse(saved, null);
     }
 
@@ -251,6 +252,7 @@ public class NoteServiceImpl implements NoteService {
         dto.setSalesTrend(e.trend().get(note.getId()));
         PriceSuggestionResponse sugg = getPriceSuggestion(note.getExam(), note.getSubject());
         dto.setSuggestedPrice(sugg.price());
+        dto.setRejectionReason(note.getRejectionReason());
         return dto;
     }
 
@@ -260,6 +262,9 @@ public class NoteServiceImpl implements NoteService {
     @Transactional
     public NoteResponse updatePrice(Long noteId, PriceUpdateRequest request, Long sellerId) {
         Note note = fetchSellerOwnedNote(noteId, sellerId);
+        if (note.getStatus() == NoteStatus.PENDING_REVIEW) {
+            throw new BadRequestException("This note is awaiting admin review and can't be edited until the review is complete.");
+        }
         note.setPrice(request.getPrice());
         log.info("Note id={} price updated to {} by seller id={}", noteId, request.getPrice(), sellerId);
         return toResponse(noteRepository.save(note), null);
@@ -273,6 +278,11 @@ public class NoteServiceImpl implements NoteService {
                                    MultipartFile thumbnail,
                                    Long sellerId) {
         Note note = fetchSellerOwnedNote(noteId, sellerId);
+
+        // Locked while awaiting admin review — content can't change mid-review.
+        if (note.getStatus() == NoteStatus.PENDING_REVIEW) {
+            throw new BadRequestException("This note is awaiting admin review and can't be edited until the review is complete.");
+        }
 
         // Edit guard: can't switch a note into a category you're not approved in.
         authorizeListing(sellerId, request.getCategory(), request.getExam(), request.getSubject());
@@ -306,7 +316,19 @@ public class NoteServiceImpl implements NoteService {
             }
         }
 
-        log.info("Note id={} updated by seller id={}", noteId, sellerId);
+        // Re-review rules:
+        //  • Any PDF swap invalidates the prior approval (the reviewed content is gone),
+        //    so the note must be re-approved before it can be live again.
+        //  • A rejected note resubmits for review on any edit.
+        boolean newPdf = pdf != null && !pdf.isEmpty();
+        if (newPdf) {
+            note.setApproved(false);
+            note.setStatus(NoteStatus.PENDING_REVIEW);
+        } else if (note.getStatus() == NoteStatus.REJECTED) {
+            note.setStatus(NoteStatus.PENDING_REVIEW);
+        }
+
+        log.info("Note id={} updated by seller id={} (status={})", noteId, sellerId, note.getStatus());
         return toResponse(noteRepository.save(note), null);
     }
 
@@ -314,8 +336,21 @@ public class NoteServiceImpl implements NoteService {
     @Transactional
     public NoteResponse setVisibility(Long noteId, boolean active, Long sellerId) {
         Note note = fetchSellerOwnedNote(noteId, sellerId);
-        note.setStatus(active ? NoteStatus.ACTIVE : NoteStatus.INACTIVE);
-        log.info("Note id={} visibility set to {} by seller id={}", noteId, note.getStatus(), sellerId);
+        if (active) {
+            // A note can only go LIVE if its current content was admin-approved.
+            // Otherwise "publish" means "submit for review" — this closes the loophole
+            // where a clone / hidden / edited note could be made live without review.
+            note.setStatus(note.isApproved() ? NoteStatus.ACTIVE : NoteStatus.PENDING_REVIEW);
+        } else {
+            // Only a LIVE note can be hidden — never pull a pending/rejected note out of
+            // review into a "hidden + unapproved" limbo.
+            if (note.getStatus() != NoteStatus.ACTIVE) {
+                throw new BadRequestException("Only a live note can be hidden.");
+            }
+            note.setStatus(NoteStatus.INACTIVE);
+        }
+        log.info("Note id={} visibility set to {} by seller id={} (approved={})",
+                noteId, note.getStatus(), sellerId, note.isApproved());
         return toResponse(noteRepository.save(note), null);
     }
 
@@ -368,7 +403,8 @@ public class NoteServiceImpl implements NoteService {
                 .thumbnailUrl(src.getThumbnailUrl())
                 .totalPages(src.getTotalPages())
                 .seller(src.getSeller())
-                .status(NoteStatus.INACTIVE)   // clone starts hidden — seller reviews then publishes
+                .status(NoteStatus.INACTIVE)   // clone starts as a hidden draft
+                .approved(false)               // copied content is not approved — must pass review before it can go live
                 .build();
         Note saved = noteRepository.save(copy);
         log.info("Note id={} cloned to id={} by seller id={}", noteId, saved.getId(), sellerId);
@@ -400,6 +436,24 @@ public class NoteServiceImpl implements NoteService {
         note.setStatus(NoteStatus.DELETED);
         noteRepository.save(note);
         log.info("Note id={} soft-deleted by seller id={}", noteId, sellerId);
+    }
+
+    @Override
+    @Transactional
+    public void permanentlyDeleteNote(Long noteId, Long sellerId) {
+        // Trash-only fetch (fetchSellerOwnedNote excludes DELETED notes).
+        Note note = noteRepository.findById(noteId)
+                .filter(n -> n.getSeller().getId().equals(sellerId))
+                .orElseThrow(() -> new ResourceNotFoundException("Note", noteId));
+        if (note.getStatus() != NoteStatus.DELETED) {
+            throw new BadRequestException("Move the note to Trash before deleting it permanently.");
+        }
+        // Never hard-delete a sold note — buyers must keep access to what they paid for.
+        if (note.getPurchaseCount() != null && note.getPurchaseCount() > 0) {
+            throw new BadRequestException("This note has buyers and can't be permanently deleted — they would lose access.");
+        }
+        noteRepository.delete(note);
+        log.info("Note id={} permanently deleted by seller id={}", noteId, sellerId);
     }
 
     /** Reads the page count from an uploaded PDF; 0 if it can't be parsed (non-fatal). */
@@ -459,6 +513,7 @@ public class NoteServiceImpl implements NoteService {
                 .previewUrl(note.getPreviewUrl())
                 .totalPages(note.getTotalPages())
                 .status(note.getStatus())
+                .approved(note.isApproved())
                 .purchaseCount(note.getPurchaseCount())
                 .viewCount(note.getViewCount())
                 .averageRating(note.getAverageRating())

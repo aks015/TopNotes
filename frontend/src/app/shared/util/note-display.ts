@@ -69,15 +69,18 @@ export function examLabel(examType?: string): string {
 }
 
 /**
- * Title-cases user input for consistent listings: capitalises the first letter
- * of each word and collapses runs of whitespace. Existing capitals are left
- * untouched so acronyms (JEE, NCERT, UPSC) typed in caps survive.
+ * Title-cases user input for consistent listings: collapses whitespace and
+ * Title-Cases each word, fixing ALL-CAPS "shouting" (GENERAL APTITUDE →
+ * General Aptitude) while preserving short all-caps tokens as acronyms
+ * (GATE, JEE, NEET, UPSC, SSC, PYQ, NCERT, plus numbers like "12").
  */
 export function toTitleCase(value?: string): string {
   return (value ?? '')
     .replace(/\s+/g, ' ')
-    .replace(/(^|\s)(\p{L})/gu, (_m, sep: string, ch: string) => sep + ch.toUpperCase())
-    .trim();
+    .trim()
+    .split(' ')
+    .map((w) => (/^[A-Z0-9]{2,5}$/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()))
+    .join(' ');
 }
 
 export function initials(name?: string): string {

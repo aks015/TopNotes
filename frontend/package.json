@@ -30,6 +30,7 @@
     "@cashfreepayments/cashfree-js": "^1.0.7",
     "chart.js": "^4.4.3",
     "lucide-angular": "^1.0.0",
+    "ngx-image-cropper": "^8.1.1",
     "pdfjs-dist": "^4.8.69",
     "rxjs": "~7.8.0",
     "tslib": "^2.6.0",

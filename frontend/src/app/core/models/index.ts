@@ -1,7 +1,7 @@
 // ── Auth ─────────────────────────────────────────────────────────
 export type UserRole = 'ADMIN' | 'SELLER' | 'BUYER';
 export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'DELETED';
-export type NoteStatus = 'ACTIVE' | 'INACTIVE' | 'DELETED';
+export type NoteStatus = 'PENDING_REVIEW' | 'REJECTED' | 'ACTIVE' | 'INACTIVE' | 'DELETED';
 export type PaymentStatus = 'PENDING' | 'COMPLETED' | 'FAILED' | 'REFUNDED';
 
 export interface AuthResponse {
@@ -15,6 +15,8 @@ export interface AuthResponse {
   profileImageUrl?: string;
   role: UserRole;
   isVerified: boolean;
+  /** True once the user confirms control of their email via OTP. */
+  emailVerified?: boolean;
   createdAt?: string;
 }
 
@@ -35,6 +37,19 @@ export interface User {
   marksheetApproved?: boolean;
   marksheetUrl?: string;
   createdAt?: string;
+}
+
+// ── Consent / agreements ─────────────────────────────────────────
+export type AgreementType = 'SELLER_AGREEMENT' | 'ORIGINALITY_DECLARATION';
+
+export interface Agreement {
+  type: AgreementType;
+  version: number;
+  title: string;
+  body: string;
+  contentHash: string;
+  /** Whether the current user already accepted this version. */
+  accepted: boolean;
 }
 
 // ── Notification ─────────────────────────────────────────────────
@@ -99,6 +114,10 @@ export interface Note {
   previewUrl?: string;
   totalPages?: number;
   status?: NoteStatus;
+  /** True once an admin has approved the current content — only then can the seller publish it live. */
+  approved?: boolean;
+  /** Admin's reason when the note was rejected (seller-only). */
+  rejectionReason?: string;
   purchaseCount?: number;
   averageRating?: number;
   reviewCount?: number;
@@ -243,8 +262,21 @@ export interface LandingContent {
     story?: string;
     items?: { name: string; role: string; bio: string; photoUrl?: string; linkedin?: string; verified?: boolean }[];
   };
-  faq?: { enabled?: boolean; eyebrow?: string; heading?: string; firstOpen?: boolean; items?: { q: string; a: string }[] };
-  cta?: { enabled?: boolean; eyebrow?: string; title?: string; subtitle?: string; button?: string; buttonLink?: string };
+  faq?: {
+    enabled?: boolean;
+    eyebrow?: string;
+    heading?: string;
+    firstOpen?: boolean;
+    items?: { q: string; a: string }[];
+  };
+  cta?: {
+    enabled?: boolean;
+    eyebrow?: string;
+    title?: string;
+    subtitle?: string;
+    button?: string;
+    buttonLink?: string;
+  };
   footer?: {
     tagline?: string;
     social?: { instagram?: string; x?: string; linkedin?: string; youtube?: string };
@@ -351,6 +383,31 @@ export interface ReviewStats {
   total: number;
   /** star (1-5) → count; keys arrive as strings over JSON */
   counts: Record<string, number>;
+}
+
+/** Admin-only view of a note awaiting content review (includes pdfUrl to inspect). */
+export interface PendingNote {
+  id: number;
+  title: string;
+  description: string;
+  category?: string;
+  exam?: string;
+  subject?: string;
+  level?: string;
+  price: number;
+  thumbnailUrl?: string;
+  pdfUrl?: string;
+  totalPages?: number;
+  sellerId: number;
+  sellerName: string;
+  sellerEmail: string;
+  createdAt?: string;
+  // Decision-support for the reviewer
+  originalityDeclared?: boolean;
+  originalityDeclaredAt?: string;
+  sellerApprovedCount?: number;
+  sellerRejectedCount?: number;
+  sellerQualifiedCategory?: string;
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────
